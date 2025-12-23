@@ -1,0 +1,82 @@
+# .gitignore per devShop Application
+
+# User-specific files
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+
+# Visual Studio cache/options
+.vs/
+*.vsidx
+*.vssscc
+$tf/
+
+# NuGet Packages
+*.nupkg
+**/packages/*
+!**/packages/build/
+*.nuget.props
+*.nuget.targets
+
+# MSTest test Results
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+
+# .NET Core
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Publish profiles
+*.pubxml
+*.publishsettings
+
+# Web publish log
+PublishScripts/
+
+# IIS temporary files
+*.iisreset
+
+# Database files (local development)
+*.mdf
+*.ldf
+*.ndf
+
+# SQL Server files
+*.bak
+
+# Configuration files con dati sensibili
+**/setup-config.json
+**/appsettings.local.json
+
+# Log files
+*.log
+logs/
+*.txt
+
+# OS generated files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Temporary files
+*.tmp
+*.temp

@@ -1,0 +1,125 @@
+@model devShop.Models.Product
+
+@{
+    ViewBag.Title = Model.ProductName;
+}
+
+<div class="row">
+    <div class="col-md-12">
+        <ol class="breadcrumb">
+            <li><a href="@Url.Action("Index", "Home")">Home</a></li>
+            <li><a href="@Url.Action("Index", "Products")">Products</a></li>
+            <li class="active">@Model.ProductName</li>
+        </ol>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        @if (!string.IsNullOrEmpty(Model.ImageUrl))
+        {
+            <img src="@Model.ImageUrl" alt="@Model.ProductName" class="img-responsive" style="max-height: 400px;" />
+        }
+        else
+        {
+            <div style="height: 400px; background-color: #f0f0f0; display: flex; align-items: center; justify-content: center;">
+                <span class="text-muted">No Image Available</span>
+            </div>
+        }
+    </div>
+    
+    <div class="col-md-6">
+        <h2>@Model.ProductName</h2>
+        <hr />
+        
+        <p><span class="label label-info">@Model.Category.CategoryName</span></p>
+        
+        <h3 class="text-success">$@Model.UnitPrice.ToString("F2")</h3>
+        
+        <p class="text-muted">
+            <strong>Availability:</strong> 
+            @if (Model.UnitsInStock > 0)
+            {
+                <span class="text-success">In Stock (@Model.UnitsInStock units available)</span>
+            }
+            else
+            {
+                <span class="text-danger">Out of Stock</span>
+            }
+        </p>
+        
+        <hr />
+        
+        <h4>Description</h4>
+        <p>@Model.Description</p>
+        
+        <hr />
+        
+        @if (Model.UnitsInStock > 0)
+        {
+            <div class="panel panel-primary">
+                <div class="panel-heading">
+                    <h3 class="panel-title">Purchase This Product</h3>
+                </div>
+                <div class="panel-body">
+                    @using (Html.BeginForm("Buy", "Products", FormMethod.Post))
+                    {
+                        <input type="hidden" name="productId" value="@Model.ProductID" />
+                        
+                        <div class="form-group">
+                            <label for="customerEmail">Your Email:</label>
+                            <input type="email" class="form-control" id="customerEmail" name="customerEmail" placeholder="your@email.com" required />
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="quantity">Quantity:</label>
+                            <input type="number" class="form-control" id="quantity" name="quantity" min="1" max="@Model.UnitsInStock" value="1" required />
+                        </div>
+                        
+                        <button type="submit" class="btn btn-success btn-lg btn-block">
+                            <i class="glyphicon glyphicon-shopping-cart"></i> Buy Now
+                        </button>
+                    }
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="alert alert-warning">
+                <strong>This product is currently out of stock.</strong>
+            </div>
+        }
+        
+        <a href="@Url.Action("Index", "Products")" class="btn btn-default">
+            <i class="glyphicon glyphicon-arrow-left"></i> Back to Products
+        </a>
+    </div>
+</div>
+
+<div class="row" style="margin-top: 30px;">
+    <div class="col-md-12">
+        <h3>Product Information</h3>
+        <table class="table table-bordered">
+            <tr>
+                <th>Product ID</th>
+                <td>@Model.ProductID</td>
+            </tr>
+            <tr>
+                <th>Category</th>
+                <td>@Model.Category.CategoryName</td>
+            </tr>
+            <tr>
+                <th>Price</th>
+                <td>$@Model.UnitPrice.ToString("F2")</td>
+            </tr>
+            <tr>
+                <th>Units in Stock</th>
+                <td>@Model.UnitsInStock</td>
+            </tr>
+            <tr>
+                <th>Status</th>
+                <td>@(Model.IsActive ? "Active" : "Inactive")</td>
+            </tr>
+        </table>
+    </div>
+</div>

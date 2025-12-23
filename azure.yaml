@@ -1,0 +1,35 @@
+# Azure Developer CLI configuration for devShop application
+# This template deploys a two-tier application with:
+# - Frontend: Windows Server VM with IIS hosting ASP.NET application
+# - Backend: Windows Server VM with SQL Server 2022 pre-installed
+
+name: devshop-azure
+metadata:
+  template: devshop-azure@0.0.1-beta
+
+# Services to deploy
+services:
+  web:
+    # ASP.NET MVC application
+    project: ./src/devShop
+    language: csharp
+    host: iis-vm
+    
+# Hooks for automated configuration
+hooks:
+  postprovision:
+    windows:
+      shell: pwsh
+      run: ./scripts/post-provision.ps1
+      continueOnError: false
+    posix:
+      shell: sh
+      run: |
+        echo "Post-provision scripts require PowerShell on Windows"
+        exit 1
+  
+  predeploy:
+    windows:
+      shell: pwsh
+      run: ./scripts/pre-deploy.ps1
+      continueOnError: false
