@@ -115,10 +115,10 @@ resource sqlVm 'Microsoft.Compute/virtualMachines@2023-09-01' = {
       adminUsername: adminUsername
       adminPassword: adminPassword
       windowsConfiguration: {
-        enableAutomaticUpdates: true
+        enableAutomaticUpdates: false
         provisionVMAgent: true
         patchSettings: {
-          patchMode: 'AutomaticByPlatform'
+          patchMode: 'Manual'
           assessmentMode: 'ImageDefault'
         }
       }

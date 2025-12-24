@@ -34,8 +34,14 @@ param sqlVmSize string = 'Standard_B4ms'
 @description('VM size for Web Server')
 param webVmSize string = 'Standard_B2ms'
 
+@description('Current UTC timestamp for unique resource naming')
+param deploymentUtcNow string = utcNow()
+
+@description('Public IP address allowed for RDP access (leave empty to allow from anywhere)')
+param myIp string = ''
+
 // Generate unique resource token for naming
-var resourceToken = toLower(uniqueString(subscription().id, environmentName, location))
+var resourceToken = toLower(uniqueString(subscription().id, environmentName, location, deploymentUtcNow))
 var tags = {
   'azd-env-name': environmentName
   Application: 'devShop'
@@ -57,6 +63,7 @@ module network 'network.bicep' = {
     environmentName: environmentName
     location: location
     tags: tags
+    allowedRdpSourceIp: myIp
   }
 }
 

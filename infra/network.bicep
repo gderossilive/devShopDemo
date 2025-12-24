@@ -10,6 +10,9 @@ param location string = resourceGroup().location
 @description('Tags to apply to all resources')
 param tags object = {}
 
+@description('Public IP address allowed for RDP access (empty string = allow from anywhere)')
+param allowedRdpSourceIp string = ''
+
 // Network configuration
 var vnetName = 'vnet-${environmentName}'
 var webSubnetName = 'snet-web'
@@ -93,11 +96,11 @@ resource webNsg 'Microsoft.Network/networkSecurityGroups@2023-11-01' = {
           direction: 'Inbound'
           access: 'Allow'
           protocol: 'Tcp'
-          sourceAddressPrefix: '*'
+          sourceAddressPrefix: allowedRdpSourceIp != '' ? allowedRdpSourceIp : '*'
           sourcePortRange: '*'
           destinationAddressPrefix: '*'
           destinationPortRange: '3389'
-          description: 'Allow RDP for management'
+          description: allowedRdpSourceIp != '' ? 'Allow RDP from specific IP' : 'Allow RDP for management'
         }
       }
       {
@@ -146,11 +149,11 @@ resource dbNsg 'Microsoft.Network/networkSecurityGroups@2023-11-01' = {
           direction: 'Inbound'
           access: 'Allow'
           protocol: 'Tcp'
-          sourceAddressPrefix: '*'
+          sourceAddressPrefix: allowedRdpSourceIp != '' ? allowedRdpSourceIp : '*'
           sourcePortRange: '*'
           destinationAddressPrefix: '*'
           destinationPortRange: '3389'
-          description: 'Allow RDP for management'
+          description: allowedRdpSourceIp != '' ? 'Allow RDP from specific IP' : 'Allow RDP for management'
         }
       }
       {

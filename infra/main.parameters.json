@@ -19,6 +19,9 @@
     },
     "webVmAdminPassword": {
       "value": "${WEB_ADMIN_PASSWORD}"
+    },
+    "myIp": {
+      "value": "${MY_IP=}"
     }
   }
 }

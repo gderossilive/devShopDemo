@@ -29,6 +29,9 @@ param sqlAdminUsername string
 @secure()
 param sqlAdminPassword string
 
+@description('Current UTC time for SAS token expiry calculation')
+param currentUtcTime string = utcNow()
+
 @description('Tags to apply to all resources')
 param tags object = {}
 
@@ -40,6 +43,40 @@ var vmName = 'vm-web-${environmentName}'
 var nicName = 'nic-web-${environmentName}'
 var publicIpName = 'pip-web-${environmentName}'
 var osDiskName = '${vmName}-osdisk'
+
+// Storage Account for deployment scripts (defined early for use in VM extension)
+resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
+  name: 'st${uniqueString(resourceGroup().id, environmentName)}'
+  location: location
+  tags: tags
+  sku: {
+    name: 'Standard_LRS'
+  }
+  kind: 'StorageV2'
+  properties: {
+    accessTier: 'Hot'
+    supportsHttpsTrafficOnly: true
+    minimumTlsVersion: 'TLS1_2'
+    allowBlobPublicAccess: false
+  }
+}
+
+// Blob container for scripts
+resource scriptsContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
+  name: '${storageAccount.name}/default/scripts'
+  properties: {
+    publicAccess: 'None'
+  }
+}
+
+// SAS token properties for secure script download
+var sasProperties = {
+  signedServices: 'b'
+  signedPermission: 'r'
+  signedExpiry: dateTimeAdd(currentUtcTime, 'PT2H')
+  signedResourceTypes: 'o'
+  signedProtocol: 'https'
+}
 
 // Public IP for Web Server VM
 resource publicIp 'Microsoft.Network/publicIPAddresses@2023-11-01' = {
@@ -112,10 +149,10 @@ resource webVm 'Microsoft.Compute/virtualMachines@2023-09-01' = {
       adminUsername: adminUsername
       adminPassword: adminPassword
       windowsConfiguration: {
-        enableAutomaticUpdates: true
+        enableAutomaticUpdates: false
         provisionVMAgent: true
         patchSettings: {
-          patchMode: 'AutomaticByPlatform'
+          patchMode: 'Manual'
           assessmentMode: 'ImageDefault'
         }
       }
@@ -128,60 +165,6 @@ resource webVm 'Microsoft.Compute/virtualMachines@2023-09-01' = {
       ]
     }
   }
-}
-
-// Custom Script Extension to install IIS and configure the web server
-resource webSetupScript 'Microsoft.Compute/virtualMachines/extensions@2023-09-01' = {
-  name: 'SetupIIS'
-  parent: webVm
-  location: location
-  tags: tags
-  properties: {
-    publisher: 'Microsoft.Compute'
-    type: 'CustomScriptExtension'
-    typeHandlerVersion: '1.10'
-    autoUpgradeMinorVersion: true
-    protectedSettings: {
-      commandToExecute: 'powershell -ExecutionPolicy Unrestricted -File setup-iis.ps1 "${sqlServerPrivateIp}" "${sqlAdminUsername}" "${sqlAdminPassword}"'
-      fileUris: [
-        '${storageAccount.properties.primaryEndpoints.blob}scripts/setup-iis.ps1${storageAccount.listAccountSas(storageAccount.apiVersion, sasProperties).accountSasToken}'
-      ]
-    }
-  }
-}
-
-// Storage Account for deployment scripts
-resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
-  name: 'st${uniqueString(resourceGroup().id, environmentName)}'
-  location: location
-  tags: tags
-  sku: {
-    name: 'Standard_LRS'
-  }
-  kind: 'StorageV2'
-  properties: {
-    accessTier: 'Hot'
-    supportsHttpsTrafficOnly: true
-    minimumTlsVersion: 'TLS1_2'
-    allowBlobPublicAccess: false
-  }
-}
-
-// Blob container for scripts
-resource scriptsContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
-  name: '${storageAccount.name}/default/scripts'
-  properties: {
-    publicAccess: 'None'
-  }
-}
-
-// SAS token properties for secure script download
-var sasProperties = {
-  signedServices: 'b'
-  signedPermission: 'r'
-  signedExpiry: dateTimeAdd(utcNow(), 'PT2H')
-  signedResourceTypes: 'o'
-  signedProtocol: 'https'
 }
 
 // Auto-shutdown schedule - shutdown at 7:00 PM daily
