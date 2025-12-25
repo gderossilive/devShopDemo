@@ -130,8 +130,8 @@ jobs:
         Write-Host "Initializing deployment..."
         az vm run-command invoke --resource-group $resourceGroup --name $vmName --command-id RunPowerShellScript --scripts "New-Item -ItemType Directory -Force 'C:\Temp' | Out-Null; \`$null = New-Item -ItemType File -Force 'C:\Temp\app.txt'; Write-Host 'Ready'" | Out-Null
         
-        # Upload in 50KB chunks
-        $chunkSize = 50000
+        # Upload in 1KB chunks to keep command lines small
+        $chunkSize = 1000
         $totalChunks = [math]::Ceiling($base64Zip.Length / $chunkSize)
         Write-Host "Uploading in $totalChunks chunks..."
         
