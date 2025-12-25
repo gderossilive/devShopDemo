@@ -144,14 +144,39 @@ jobs:
         Start-Sleep -Seconds 30
         
         Write-Host "Creating container with public access..."
-        az storage container create `
-          --name $containerName `
-          --account-name $storageAccountName `
-          --public-access blob `
-          --auth-mode login
+        $retryCount = 0
+        $maxRetries = 3
+        $containerCreated = $false
         
-        if ($LASTEXITCODE -ne 0) {
-          throw "Failed to create container"
+        while (-not $containerCreated -and $retryCount -lt $maxRetries) {
+          $retryCount++
+          Write-Host "Attempt $retryCount to create container..."
+          
+          az storage container create `
+            --name $containerName `
+            --account-name $storageAccountName `
+            --public-access blob `
+            --auth-mode login
+          
+          # Verify container exists
+          Start-Sleep -Seconds 5
+          $exists = az storage container exists `
+            --name $containerName `
+            --account-name $storageAccountName `
+            --auth-mode login `
+            --query exists -o tsv
+          
+          if ($exists -eq 'true') {
+            $containerCreated = $true
+            Write-Host "Container verified as existing"
+          } else {
+            Write-Host "Container not found, waiting before retry..."
+            Start-Sleep -Seconds 10
+          }
+        }
+        
+        if (-not $containerCreated) {
+          throw "Failed to create container after $maxRetries attempts"
         }
         
         Write-Host "Container created successfully"
