@@ -117,7 +117,8 @@ jobs:
         if (-not $sshUser -or -not $pubKey) { throw "Missing SSH_USERNAME or SSH_PUBLIC_KEY secrets" }
 
         # For admin users, use ProgramData\ssh\administrators_authorized_keys
-        $script = '$ErrorActionPreference=''Stop'';$p=''' + $pubKey + ''';Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 | Out-Null;Set-Service -Name sshd -StartupType Automatic;Start-Service sshd;$auth=''C:\ProgramData\ssh\administrators_authorized_keys'';Set-Content -Path $auth -Value $p -Encoding ascii;icacls $auth /inheritance:r /grant ''Administrators:F'' /grant ''SYSTEM:F'' | Out-Null;Write-Host ''OpenSSH ready'''
+        # Also ensure Windows Firewall allows SSH
+        $script = '$ErrorActionPreference=''Stop'';$p=''' + $pubKey + ''';Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 | Out-Null;Set-Service -Name sshd -StartupType Automatic;Start-Service sshd;$auth=''C:\ProgramData\ssh\administrators_authorized_keys'';Set-Content -Path $auth -Value $p -Encoding ascii;icacls $auth /inheritance:r /grant ''Administrators:F'' /grant ''SYSTEM:F'' | Out-Null;New-NetFirewallRule -Name sshd -DisplayName ''OpenSSH Server (sshd)'' -Enabled True -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22 -ErrorAction SilentlyContinue | Out-Null;Restart-Service sshd;Write-Host ''OpenSSH ready'''
 
         # Retry loop to handle "run command in progress" conflicts
         $maxRetries = 5
@@ -157,19 +158,23 @@ jobs:
         # Get VM IP
         $ip = az vm show -d --resource-group $resourceGroup --name $vmName --query "publicIps" -o tsv
         if (-not $ip) { throw "VM IP not found" }
+        Write-Host "VM IP: $ip"
 
         # Get runner's public IP and add to NSG
         $runnerIp = (Invoke-RestMethod -Uri 'https://api.ipify.org')
         Write-Host "Adding runner IP $runnerIp to NSG..."
         az network nsg rule create --resource-group $resourceGroup --nsg-name nsg-web-devShop --name AllowSSH-Runner --priority 110 --direction Inbound --access Allow --protocol Tcp --destination-port-ranges 22 --source-address-prefixes "$runnerIp/32" --output none 2>$null
-        Start-Sleep -Seconds 5
+        
+        # Wait longer for NSG rule to propagate
+        Write-Host "Waiting 30 seconds for NSG rule propagation..."
+        Start-Sleep -Seconds 30
 
         # Create package
         Compress-Archive -Path "publish\*" -DestinationPath "built-app.zip" -Force
 
         Write-Host "Copying package to VM via scp..."
         $dest = "${sshUser}@${ip}:/c:/Temp/built-app.zip"
-        scp -i $keyPath -o StrictHostKeyChecking=no -o ConnectTimeout=30 "built-app.zip" $dest
+        scp -v -i $keyPath -o StrictHostKeyChecking=no -o ConnectTimeout=60 "built-app.zip" $dest
 
     - name: Deploy on VM
       shell: pwsh
