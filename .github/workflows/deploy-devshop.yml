@@ -33,16 +33,32 @@ jobs:
     - name: Build solution
       run: msbuild src/devShop.sln /p:Configuration=Release /p:Platform="Any CPU" /p:DeployOnBuild=false
     
+    - name: Verify build output
+      shell: pwsh
+      run: |
+        Write-Host "Checking build output:"
+        if (Test-Path "src/devShop/bin/Release") {
+          Write-Host "✓ bin/Release folder exists"
+          Get-ChildItem "src/devShop/bin/Release" | Select-Object Name, Length
+        } else {
+          Write-Host "✗ bin/Release folder NOT found"
+          Write-Host "Searching for bin folder:"
+          Get-ChildItem "src/devShop" -Directory -Recurse -Filter "bin" | Select-Object FullName
+        }
+    
     - name: Prepare deployment package
       shell: pwsh
       run: |
         $publishDir = "publish"
         New-Item -ItemType Directory -Path $publishDir -Force
         
-        # Copy all necessary files
+        # Copy all necessary files including the built bin folder
         Copy-Item -Path "src/devShop/*" -Destination $publishDir -Recurse -Exclude @('obj', '*.csproj.user', 'packages')
         
         Write-Host "Files prepared for deployment"
+        Write-Host "Checking for bin folder:"
+        Get-ChildItem "src/devShop/bin" -Recurse -ErrorAction SilentlyContinue | Select-Object FullName
+        Write-Host "Publish directory contents:"
         Get-ChildItem $publishDir -Recurse | Select-Object FullName
     
     - name: Create deployment package
