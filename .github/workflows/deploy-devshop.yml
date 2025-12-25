@@ -116,7 +116,8 @@ jobs:
 
         if (-not $sshUser -or -not $pubKey) { throw "Missing SSH_USERNAME or SSH_PUBLIC_KEY secrets" }
 
-        $script = '$ErrorActionPreference=''Stop'';$u=''' + $sshUser + ''';$p=''' + $pubKey + ''';Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 | Out-Null;Set-Service -Name sshd -StartupType Automatic;Start-Service sshd;$prof=''C:\Users\''+$u;if (-not (Test-Path $prof)) { throw ''User missing'' };$sshDir=Join-Path $prof ''.ssh'';New-Item -ItemType Directory -Path $sshDir -Force | Out-Null;$auth=Join-Path $sshDir ''authorized_keys'';Set-Content -Path $auth -Value $p -Encoding ascii;$g=$u+'':(OI)(CI)F'';icacls $sshDir /inheritance:r /grant $g | Out-Null;$g2=$u+'':F'';icacls $auth /inheritance:r /grant $g2 | Out-Null;Write-Host ''OpenSSH ready'''
+        # Script creates user profile if missing and configures OpenSSH
+        $script = '$ErrorActionPreference=''Stop'';$u=''' + $sshUser + ''';$p=''' + $pubKey + ''';Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 | Out-Null;Set-Service -Name sshd -StartupType Automatic;Start-Service sshd;$prof=''C:\Users\''+$u;if (-not (Test-Path $prof)) { New-Item -ItemType Directory -Path $prof -Force | Out-Null };$sshDir=Join-Path $prof ''.ssh'';New-Item -ItemType Directory -Path $sshDir -Force | Out-Null;$auth=Join-Path $sshDir ''authorized_keys'';Set-Content -Path $auth -Value $p -Encoding ascii;$g=$u+'':(OI)(CI)F'';icacls $sshDir /inheritance:r /grant $g | Out-Null;$g2=$u+'':F'';icacls $auth /inheritance:r /grant $g2 | Out-Null;Write-Host ''OpenSSH ready'''
 
         # Retry loop to handle "run command in progress" conflicts
         $maxRetries = 5
