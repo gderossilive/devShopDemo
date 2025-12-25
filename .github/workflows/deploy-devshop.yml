@@ -137,57 +137,36 @@ jobs:
           --resource-group $resourceGroup `
           --location westeurope `
           --sku Standard_LRS `
-          --allow-blob-public-access true
+          --allow-blob-public-access true `
+          --allow-shared-key-access true
         
-        # Wait for account to be ready and role to propagate
-        Write-Host "Waiting for storage account and permissions to be ready..."
-        Start-Sleep -Seconds 30
+        # Wait for account to be ready
+        Write-Host "Waiting for storage account to be ready..."
+        Start-Sleep -Seconds 10
+        
+        # Get storage account key
+        Write-Host "Getting storage account key..."
+        $storageKey = az storage account keys list `
+          --resource-group $resourceGroup `
+          --account-name $storageAccountName `
+          --query "[0].value" -o tsv
         
         Write-Host "Creating container with public access..."
-        $retryCount = 0
-        $maxRetries = 3
-        $containerCreated = $false
-        
-        while (-not $containerCreated -and $retryCount -lt $maxRetries) {
-          $retryCount++
-          Write-Host "Attempt $retryCount to create container..."
-          
-          az storage container create `
-            --name $containerName `
-            --account-name $storageAccountName `
-            --public-access blob `
-            --auth-mode login
-          
-          # Verify container exists
-          Start-Sleep -Seconds 5
-          $exists = az storage container exists `
-            --name $containerName `
-            --account-name $storageAccountName `
-            --auth-mode login `
-            --query exists -o tsv
-          
-          if ($exists -eq 'true') {
-            $containerCreated = $true
-            Write-Host "Container verified as existing"
-          } else {
-            Write-Host "Container not found, waiting before retry..."
-            Start-Sleep -Seconds 10
-          }
-        }
-        
-        if (-not $containerCreated) {
-          throw "Failed to create container after $maxRetries attempts"
-        }
+        az storage container create `
+          --name $containerName `
+          --account-name $storageAccountName `
+          --account-key $storageKey `
+          --public-access blob
         
         Write-Host "Container created successfully"
         
         Write-Host "Uploading package..."
         az storage blob upload `
           --account-name $storageAccountName `
+          --account-key $storageKey `
           --container-name $containerName `
           --name "built-app.zip" `
           --file "built-app.zip" `
-          --auth-mode login `
           --overwrite
         
         $blobUrl = "https://$storageAccountName.blob.core.windows.net/$containerName/built-app.zip"
