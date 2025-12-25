@@ -146,8 +146,37 @@ jobs:
         
         # Deploy
         Write-Host "Deploying..."
-        $cmd = "\`$ErrorActionPreference='Stop';\`$b=Get-Content 'C:\Temp\app.txt' -Raw;\`$bytes=[Convert]::FromBase64String(\`$b);[IO.File]::WriteAllBytes('C:\Temp\app.zip',\`$bytes);\`$app='C:\inetpub\wwwroot\devShop';Import-Module WebAdministration;Stop-WebAppPool 'devShopPool' -EA:0;Sleep 2;if(Test-Path \`$app){rm \"\`$app\*\" -R -Force}else{mkdir \`$app -Force|Out-Null};Expand-Archive 'C:\Temp\app.zip' \`$app -Force;icacls \`$app /grant 'IIS_IUSRS:(OI)(CI)RX' /T|Out-Null;icacls \`$app /grant 'IUSR:(OI)(CI)RX' /T|Out-Null;if(Test-Path \"\`$app\App_Data\"){icacls \"\`$app\App_Data\" /grant 'IIS_IUSRS:(OI)(CI)F' /T|Out-Null};Start-WebAppPool 'devShopPool';Start-Website 'devShop' -EA:0;Write-Host 'Done';gci \"\`$app\bin\" -EA:0|select Name,Length|%{Write-Host \"  \`$(\`$_.Name)-\`$(\`$_.Length)b\"};rm 'C:\Temp\app.zip','C:\Temp\app.txt' -Force -EA:0"
-        
+        $cmd = @'
+$ErrorActionPreference = "Stop"
+$b = Get-Content 'C:\Temp\app.txt' -Raw
+$bytes = [Convert]::FromBase64String($b)
+[IO.File]::WriteAllBytes('C:\Temp\app.zip', $bytes)
+$app = 'C:\inetpub\wwwroot\devShop'
+
+Import-Module WebAdministration
+Stop-WebAppPool -Name 'devShopPool' -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 2
+
+if (Test-Path $app) {
+  Remove-Item "$app\*" -Recurse -Force
+} else {
+  New-Item -ItemType Directory -Path $app -Force | Out-Null
+}
+
+Expand-Archive -Path 'C:\Temp\app.zip' -DestinationPath $app -Force
+icacls $app /grant 'IIS_IUSRS:(OI)(CI)RX' /T | Out-Null
+icacls $app /grant 'IUSR:(OI)(CI)RX' /T | Out-Null
+if (Test-Path "$app\App_Data") {
+  icacls "$app\App_Data" /grant 'IIS_IUSRS:(OI)(CI)F' /T | Out-Null
+}
+
+Start-WebAppPool -Name 'devShopPool'
+Start-Website -Name 'devShop' -ErrorAction SilentlyContinue
+Write-Host 'Deployed'
+Get-ChildItem "$app\bin" -ErrorAction SilentlyContinue | Select Name,Length | ForEach-Object { Write-Host "  $($_.Name) - $($_.Length)b" }
+Remove-Item 'C:\Temp\app.zip','C:\Temp\app.txt' -Force -ErrorAction SilentlyContinue
+'@
+
         az vm run-command invoke --resource-group $resourceGroup --name $vmName --command-id RunPowerShellScript --scripts $cmd
     
     - name: Verify deployment
