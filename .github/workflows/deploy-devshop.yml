@@ -115,7 +115,7 @@ jobs:
         $creds = '${{ secrets.AZURE_CREDENTIALS }}' | ConvertFrom-Json
         $clientId = $creds.clientId
         $resourceGroup = 'rg-devShop'
-        $vmName = 'webvm-devshop'
+        $vmName = 'vm-web-devShop'
         
         Write-Host "Resource Group: $resourceGroup"
         Write-Host "VM Name: $vmName"
@@ -139,8 +139,9 @@ jobs:
           --sku Standard_LRS `
           --allow-blob-public-access true
         
-        # Wait for account to be ready
-        Start-Sleep -Seconds 10
+        # Wait for account to be ready and role to propagate
+        Write-Host "Waiting for storage account and permissions to be ready..."
+        Start-Sleep -Seconds 30
         
         Write-Host "Creating container with public access..."
         az storage container create `
@@ -148,6 +149,12 @@ jobs:
           --account-name $storageAccountName `
           --public-access blob `
           --auth-mode login
+        
+        if ($LASTEXITCODE -ne 0) {
+          throw "Failed to create container"
+        }
+        
+        Write-Host "Container created successfully"
         
         Write-Host "Uploading package..."
         az storage blob upload `
