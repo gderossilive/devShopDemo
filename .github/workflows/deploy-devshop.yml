@@ -144,38 +144,9 @@ jobs:
           az vm run-command invoke --resource-group $resourceGroup --name $vmName --command-id RunPowerShellScript --scripts "Add-Content 'C:\Temp\app.txt' -Value '$chunk' -NoNewline" | Out-Null
         }
         
-        # Deploy
+        # Deploy (single-line script to avoid YAML parsing issues)
         Write-Host "Deploying..."
-        $cmd = @'
-$ErrorActionPreference = "Stop"
-$b = Get-Content 'C:\Temp\app.txt' -Raw
-$bytes = [Convert]::FromBase64String($b)
-[IO.File]::WriteAllBytes('C:\Temp\app.zip', $bytes)
-$app = 'C:\inetpub\wwwroot\devShop'
-
-Import-Module WebAdministration
-Stop-WebAppPool -Name 'devShopPool' -ErrorAction SilentlyContinue
-Start-Sleep -Seconds 2
-
-if (Test-Path $app) {
-  Remove-Item "$app\*" -Recurse -Force
-} else {
-  New-Item -ItemType Directory -Path $app -Force | Out-Null
-}
-
-Expand-Archive -Path 'C:\Temp\app.zip' -DestinationPath $app -Force
-icacls $app /grant 'IIS_IUSRS:(OI)(CI)RX' /T | Out-Null
-icacls $app /grant 'IUSR:(OI)(CI)RX' /T | Out-Null
-if (Test-Path "$app\App_Data") {
-  icacls "$app\App_Data" /grant 'IIS_IUSRS:(OI)(CI)F' /T | Out-Null
-}
-
-Start-WebAppPool -Name 'devShopPool'
-Start-Website -Name 'devShop' -ErrorAction SilentlyContinue
-Write-Host 'Deployed'
-Get-ChildItem "$app\bin" -ErrorAction SilentlyContinue | Select Name,Length | ForEach-Object { Write-Host "  $($_.Name) - $($_.Length)b" }
-Remove-Item 'C:\Temp\app.zip','C:\Temp\app.txt' -Force -ErrorAction SilentlyContinue
-'@
+        $cmd = '$ErrorActionPreference="Stop";$b=Get-Content ''C:\Temp\app.txt'' -Raw;$bytes=[Convert]::FromBase64String($b);[IO.File]::WriteAllBytes(''C:\Temp\app.zip'',$bytes);$app=''C:\inetpub\wwwroot\devShop'';Import-Module WebAdministration;Stop-WebAppPool -Name ''devShopPool'' -ErrorAction SilentlyContinue;Start-Sleep -Seconds 2;if(Test-Path $app){Remove-Item "$app\*" -Recurse -Force}else{New-Item -ItemType Directory -Path $app -Force|Out-Null};Expand-Archive -Path ''C:\Temp\app.zip'' -DestinationPath $app -Force;icacls $app /grant ''IIS_IUSRS:(OI)(CI)RX'' /T|Out-Null;icacls $app /grant ''IUSR:(OI)(CI)RX'' /T|Out-Null;if(Test-Path "$app\App_Data"){icacls "$app\App_Data" /grant ''IIS_IUSRS:(OI)(CI)F'' /T|Out-Null};Start-WebAppPool -Name ''devShopPool'';Start-Website -Name ''devShop'' -ErrorAction SilentlyContinue;Write-Host ''Deployed'';Get-ChildItem "$app\bin" -ErrorAction SilentlyContinue|Select Name,Length|ForEach-Object{Write-Host "  $($_.Name) - $($_.Length)b"};Remove-Item ''C:\Temp\app.zip'',''C:\Temp\app.txt'' -Force -ErrorAction SilentlyContinue'
 
         az vm run-command invoke --resource-group $resourceGroup --name $vmName --command-id RunPowerShellScript --scripts $cmd
     
