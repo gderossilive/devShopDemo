@@ -57,10 +57,6 @@ if (-not (Test-Path $createTablesPath) -or -not (Test-Path $populateTablesPath))
 $createTablesSql = Get-Content $createTablesPath -Raw
 $populateTablesSql = Get-Content $populateTablesPath -Raw
 
-# Escape single quotes in SQL scripts for PowerShell
-$createTablesSql = $createTablesSql -replace "'", "''"
-$populateTablesSql = $populateTablesSql -replace "'", "''"
-
 # SQL script to create database and execute setup
 $dbSetupScript = @"
 `$ErrorActionPreference = 'Stop'
@@ -154,6 +150,58 @@ if (Test-Path \"IIS:\Sites\Default Web Site\") {
 }
 
 New-Website -Name `$siteName -Port 80 -PhysicalPath `$appPath -ApplicationPool `$appPoolName -Force | Out-Null
+
+# Create a simple test page
+`$testPageHtml = @'
+<!DOCTYPE html>
+<html>
+<head>
+    <title>devShop - Ready for Deployment</title>
+    <style>
+        body { font-family: Arial; margin: 50px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #0078d4; }
+        .status { padding: 15px; background: #d4edda; border-left: 4px solid #28a745; margin: 20px 0; }
+        .warning { padding: 15px; background: #fff3cd; border-left: 4px solid #ffc107; margin: 20px 0; }
+        code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>\u2705 devShop Infrastructure Ready</h1>
+        <div class="status">
+            <strong>Status:</strong> IIS and SQL Server configured successfully!
+        </div>
+        <div class="warning">
+            <strong>Action Required:</strong> Deploy the ASP.NET application files to complete setup.
+        </div>
+        <h2>Deployment Instructions</h2>
+        <p>To deploy the devShop application:</p>
+        <ol>
+            <li>RDP to this VM using your credentials</li>
+            <li>Copy the application files from <code>src/devShop</code> to <code>C:\inetpub\wwwroot\devShop</code></li>
+            <li>Ensure the <code>bin</code> folder contains all compiled DLLs</li>
+            <li>Refresh this page to see the devShop application</li>
+        </ol>
+        <h2>Alternative: Run Deployment Script</h2>
+        <p>From your local machine with the repository, run:</p>
+        <pre style="background: #f4f4f4; padding: 15px; border-radius: 4px;">
+pwsh -File scripts/deploy-app-git.ps1
+        </pre>
+        <p><em>Note: This requires making the repository public or configuring authentication.</em></p>
+        <h2>Environment Details</h2>
+        <ul>
+            <li><strong>IIS Site:</strong> devShop</li>
+            <li><strong>App Pool:</strong> devShopPool (.NET v4.0)</li>
+            <li><strong>Physical Path:</strong> C:\inetpub\wwwroot\devShop</li>
+            <li><strong>Database:</strong> devShopDB on SQL Server</li>
+        </ul>
+    </div>
+</body>
+</html>
+'@
+
+`$testPageHtml | Out-File "`$appPath\index.html" -Encoding UTF8 -Force
 
 Write-Host 'IIS configured successfully.'
 "@

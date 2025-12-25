@@ -48,13 +48,13 @@ Questo progetto ricrea l'applicazione **devShop** del lab LAB501 con un'architet
 
 ## 🚀 Quick Start (Azure Deployment)
 │  │  SQL Server                      │  │
-│  │  └─ l501devshopdb                │  │
+│  │  └─ devShopDB                    │  │
 │  └──────────────────────────────────┘  │
 │                                         │
 │  ┌──────────────────────────────────┐  │
-│  │  File System                     │  │
-│  │  ├─ H:\temp\logs (log4net)       │  │
-│  │  └─ K:\mountfs (SMTP emails)     │  │
+│  │  File System (Azure VM)          │  │
+│  │  ├─ C:\Logs\devShop (log4net)    │  │
+│  │  └─ C:\AppData\devShop\email     │  │
 │  └──────────────────────────────────┘  │
 │                                         │
 │  ┌──────────────────────────────────┐  │
@@ -64,37 +64,49 @@ Questo progetto ricrea l'applicazione **devShop** del lab LAB501 con un'architet
 └─────────────────────────────────────────┘
 ```
 
-
 ### Prerequisiti
 
 - **Azure Subscription** con permessi di creazione risorse
 - **Azure Developer CLI (azd)** - [Installazione](https://aka.ms/azd-install)
 - **Azure CLI** - [Installazione](https://aka.ms/azcli)
 - **PowerShell 7+** - Per script di configurazione
+- **Bash** - Per lo script di deployment automatico
 - **Git** - Per clonare il repository
 
-### Deployment con azd (3 comandi!)
+### Deployment Automatico (1 comando!)
 
 ```bash
-# 1. Login e inizializzazione
-azd auth login
-azd init
+# 1. Copia il file di configurazione e modifica i valori
+cp .env.example .env
+# Modifica .env con le tue password e il tuo IP pubblico
 
-# 2. Configurare le password
-azd env set SQL_ADMIN_USERNAME sqladmin
-azd env set SQL_ADMIN_PASSWORD "YourStrongPass123!"
-azd env set WEB_ADMIN_USERNAME webadmin
-azd env set WEB_ADMIN_PASSWORD "YourStrongPass456!"
-
-# 3. Deploy completo (infrastruttura + applicazione)
-azd up
+# 2. Esegui lo script di deployment automatico
+./deploy.sh devShop
 ```
 
-**Tempo stimato**: 20-25 minuti
+**Tempo stimato**: 4-5 minuti
 
 Dopo il deployment:
 - Accedi all'applicazione tramite l'URL mostrato in output
-- Connettiti alle VM via RDP per management
+- RDP limitato al tuo IP (se configurato MY_IP in .env)
+- VMs si spengono automaticamente alle 19:00 UTC (risparmio ~50%)
+
+### Deployment Manuale (metodo alternativo)
+
+```bash
+# 1. Login
+azd auth login
+
+# 2. Configurazione ambiente
+export SQL_ADMIN_USERNAME=sqladmin
+export SQL_ADMIN_PASSWORD="YourStrongPass123!"
+export WEB_ADMIN_USERNAME=webadmin
+export WEB_ADMIN_PASSWORD="YourStrongPass456!"
+export MY_IP="YOUR_PUBLIC_IP"  # Opzionale: restringe RDP al tuo IP
+
+# 3. Deploy completo
+azd up
+```
 
 📖 **Guida completa**: [docs/AZURE_DEPLOYMENT.md](docs/AZURE_DEPLOYMENT.md)
 
@@ -104,10 +116,10 @@ Dopo il deployment:
 Ignite2025SampleApp/
 ├── infra/                    # Infrastructure as Code (Bicep)
 │   ├── main.bicep           # Orchestrator principale
-│   ├── network.bicep        # VNet, Subnets, NSGs
-│   ├── sqlvm.bicep          # SQL Server VM
-│   ├── webvm.bicep          # IIS Web VM
-│   └── main.parameters.json # Parametri deployment
+│   ├── network.bicep        # VNet, Subnets, NSGs (con RDP IP restriction)
+│   ├── sqlvm.bicep          # SQL Server VM (B-series + auto-shutdown)
+│   ├── webvm.bicep          # IIS Web VM (B-series + auto-shutdown)
+│   └── main.parameters.json # Parametri deployment (include MY_IP)
 ├── src/devShop/              # Applicazione ASP.NET 4.8
 │   ├── Controllers/          # MVC Controllers
 │   ├── Models/              # Entity Framework Models
@@ -120,14 +132,20 @@ Ignite2025SampleApp/
 │   ├── PopulateTables.sql   # Dati di esempio
 │   └── Setup-Database.ps1   # Setup automatico DB
 ├── scripts/                  # Script deployment/configurazione
-│   ├── post-provision.ps1   # Hook azd post-provisioning
+│   ├── configure-vms.ps1    # Post-provision: DB setup + IIS install
+│   ├── post-provision.ps1   # Hook azd (legacy)
 │   ├── pre-deploy.ps1       # Hook azd pre-deployment
 │   ├── setup-iis.ps1        # Setup IIS su Web VM
 │   ├── Configure-Registry.ps1
 │   └── Configure-SMTP.ps1
 ├── deployment/               # Script legacy (on-premise)
 │   └── [Script PowerShell per deployment manuale]
-├── azure.yaml                # Configurazione azd
+├── .devcontainer/            # VS Code Dev Container
+│   └── devcontainer.json    # Azure development environment
+├── deploy.sh                 # Script deployment automatico
+├── .env.example              # Template variabili ambiente
+├── .env                      # Configurazione deployment (gitignored)
+├── azure.yaml                # Configurazione azd + hooks
 └── docs/
     ├── AZURE_DEPLOYMENT.md   # Guida deployment Azure
     └── DEPLOYMENT.md         # Guida deployment on-premise (legacy)
@@ -190,6 +208,26 @@ az vm deallocate --resource-group rg-{environmentName} --name vm-sql-{environmen
 az vm auto-shutdown --resource-group rg-{environmentName} --name vm-web-{environmentName} --time 2100  # 9 PM
 ```
 
+### 💰 Ottimizzazione Costi
+
+Questo deployment include ottimizzazioni significative per ridurre i costi:
+
+**VM Sizes ottimizzate (B-series)**:
+- **Web VM**: Standard_B2ms (~€60/mese) invece di D2s_v5 (~€80/mese) - **25% risparmio**
+- **SQL VM**: Standard_B4ms (~€120/mese) invece di D4s_v5 (~€160/mese) - **25% risparmio**
+
+**Auto-shutdown** (19:00 UTC daily):
+- Spegnimento automatico ogni sera = **~50% risparmio aggiuntivo**
+- Costo mensile totale: **~€90/mese** (con auto-shutdown 12h/giorno)
+- Costo senza ottimizzazioni: **~€240/mese** (VM accese 24/7)
+
+**💡 Risparmio totale: ~€150/mese (62%)**
+
+**Sicurezza RDP**:
+- Impostando `MY_IP` in `.env`, l'accesso RDP è limitato solo al tuo IP pubblico
+- Riduce drasticamente la superficie di attacco
+- Nessun costo aggiuntivo
+
 ### Database Management
 
 ```powershell
@@ -231,24 +269,27 @@ SELECT * FROM Orders;
 
 ### Network Security
 
-- **Web Subnet**: Consente HTTP/HTTPS da Internet, RDP per management
+- **Web Subnet**: Consente HTTP/HTTPS da Internet, RDP limitato (vedi sotto)
 - **Database Subnet**: Consente solo SQL (1433) da Web Subnet
 - **NSG Rules**: Deny all by default, allow espliciti per traffico necessario
 - **Private IP**: SQL Server accessibile solo via private IP dalla Web VM
+- **RDP IP Restriction**: Se `MY_IP` è configurato in `.env`, RDP è accessibile SOLO da quell'IP
 
 ### Credentials Management
 
 - **Passwords**: Stored in azd environment (encrypted)
 - **Connection String**: Stored in Windows Registry su Web VM
 - **SQL Authentication**: Username/password per connessione applicazione
+- **Environment Variables**: File `.env` contiene secrets (gitignored per sicurezza)
 
 ### Best Practices
 
-1. **Cambia password di default** dopo il primo deployment
-2. **Configura SSL/TLS** per traffico HTTPS
-3. **Limita RDP access** a IP specifici tramite NSG
+1. ✅ **RDP IP Restriction**: Imposta `MY_IP` in `.env` con il tuo IP pubblico
+2. **Cambia password di default** dopo il primo deployment
+3. **Configura SSL/TLS** per traffico HTTPS
 4. **Abilita Azure Backup** per VMs e SQL Server
 5. **Usa Azure Key Vault** per production (sostituire Registry)
+6. **Non committare** il file `.env` nel repository (già in .gitignore)
 
 ## 📊 Monitoring
 
@@ -268,14 +309,19 @@ Dopo deployment, configura:
 ## 🚀 Performance Optimization
 
 ### Web VM
-- **VM Size**: Standard_D2s_v5 (2 vCPUs, 8GB RAM)
-- **Scale Up**: Cambia VM size per più risorse
+- **VM Size**: Standard_B2ms (2 vCPUs, 8GB RAM, burstable)
+  - B-series VMs: ottime per carichi variabili, accumula crediti CPU
+  - **Cost-effective**: ~€60/mese vs €80/mese D-series
+- **Scale Up**: Cambia VM size per più risorse (es. B4ms per più performance)
 - **IIS Tuning**: Application pool settings, output caching
 
 ### SQL VM
-- **VM Size**: Standard_D4s_v5 (4 vCPUs, 16GB RAM)
-- **Storage**: Premium SSD per data files (F:\SQLData)
+- **VM Size**: Standard_B4ms (4 vCPUs, 16GB RAM, burstable)
+  - B-series VMs: perfetto per dev/test, accumula crediti CPU per burst
+  - **Cost-effective**: ~€120/mese vs €160/mese D-series
+- **Storage**: OS disk standard (sufficiente per dev/test)
 - **SQL Tuning**: Indexes, statistics, query optimization
+- **Production**: Considera D-series o E-series per workload costanti
 
 ## 🧹 Cleanup
 

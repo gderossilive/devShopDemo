@@ -38,7 +38,7 @@
 	// "forwardPorts": [],
 
 	// Use 'postCreateCommand' to run commands after the container is created.
-	"postCreateCommand": "pwsh -Command 'Write-Host \"devShop Azure Environment Ready!\" -ForegroundColor Green; Write-Host \"Tools installed: azd, az, pwsh, git, gh, docker\" -ForegroundColor Cyan; azd version; az version --output table'",
+	"postCreateCommand": "bash -c 'if [ ! -f .env ]; then cp .env.example .env && echo \"✅ Created .env from .env.example - Please edit with your values\"; fi' && pwsh -Command 'Write-Host \"devShop Azure Environment Ready!\" -ForegroundColor Green; Write-Host \"Tools installed: azd, az, pwsh, git, gh, docker\" -ForegroundColor Cyan; Write-Host \"\"; Write-Host \"📋 Quick Start:\" -ForegroundColor Yellow; Write-Host \"  1. Edit .env with your passwords and MY_IP\" -ForegroundColor White; Write-Host \"  2. Run: ./deploy.sh devShop\" -ForegroundColor White; Write-Host \"\"; azd version; az version --output table'",
 
 	// Configure tool-specific properties.
 	"customizations": {

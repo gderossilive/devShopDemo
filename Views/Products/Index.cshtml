@@ -1,0 +1,69 @@
+@model IEnumerable<devShop.Models.Product>
+
+@{
+    ViewBag.Title = "Products";
+}
+
+<h2>Products @(ViewBag.CategoryName != null ? " - " + ViewBag.CategoryName : "")</h2>
+
+<div class="row" style="margin-bottom: 20px;">
+    <div class="col-md-12">
+        <div class="btn-group" role="group">
+            <a href="@Url.Action("Index", "Products")" class="btn btn-default @(ViewBag.CategoryName == null ? "active" : "")">All Products</a>
+            @if (ViewBag.Categories != null)
+            {
+                foreach (var cat in ViewBag.Categories)
+                {
+                    <a href="@Url.Action("Index", "Products", new { categoryId = cat.CategoryID })" 
+                       class="btn btn-default @(ViewBag.CategoryName == cat.CategoryName ? "active" : "")">
+                        @cat.CategoryName
+                    </a>
+                }
+            }
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    @if (Model != null && Model.Any())
+    {
+        foreach (var product in Model)
+        {
+            <div class="col-md-3">
+                <div class="panel panel-default product-item">
+                    <div class="panel-body">
+                        @if (!string.IsNullOrEmpty(product.ImageUrl))
+                        {
+                            <img src="@product.ImageUrl" alt="@product.ProductName" class="img-responsive" style="height: 150px; width: 100%; object-fit: cover;" />
+                        }
+                        else
+                        {
+                            <div style="height: 150px; background-color: #f0f0f0; display: flex; align-items: center; justify-content: center;">
+                                <span class="text-muted">No Image</span>
+                            </div>
+                        }
+                        <h4 style="min-height: 50px;">@product.ProductName</h4>
+                        <p><strong>$@product.UnitPrice.ToString("F2")</strong></p>
+                        <p class="text-muted"><small>Stock: @product.UnitsInStock</small></p>
+                        <a href="@Url.Action("Details", "Products", new { id = product.ProductID })" class="btn btn-primary btn-sm btn-block">View Details</a>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+    else
+    {
+        <div class="col-md-12">
+            <div class="alert alert-info">
+                <strong>No products found.</strong>
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    .product-item {
+        margin-bottom: 20px;
+        min-height: 350px;
+    }
+</style>

@@ -1,0 +1,60 @@
+@{
+    ViewBag.Title = "Purchase Confirmation";
+}
+
+<div class="row">
+    <div class="col-md-8 col-md-offset-2">
+        <div class="panel panel-success">
+            <div class="panel-heading">
+                <h3 class="panel-title">
+                    <i class="glyphicon glyphicon-ok-circle"></i> Purchase Confirmed!
+                </h3>
+            </div>
+            <div class="panel-body">
+                <div class="alert alert-success" style="font-size: 18px;">
+                    <strong>Thank you for your purchase!</strong>
+                </div>
+                
+                <h4>Order Details</h4>
+                <table class="table table-bordered">
+                    <tr>
+                        <th>Order ID</th>
+                        <td><strong>#@ViewBag.OrderID</strong></td>
+                    </tr>
+                    <tr>
+                        <th>Product</th>
+                        <td>@ViewBag.ProductName</td>
+                    </tr>
+                    <tr>
+                        <th>Quantity</th>
+                        <td>@ViewBag.Quantity</td>
+                    </tr>
+                    <tr>
+                        <th>Total Amount</th>
+                        <td><strong>$@ViewBag.TotalAmount.ToString("F2")</strong></td>
+                    </tr>
+                    <tr>
+                        <th>Customer Email</th>
+                        <td>@ViewBag.CustomerEmail</td>
+                    </tr>
+                </table>
+                
+                <div class="alert alert-info">
+                    <i class="glyphicon glyphicon-envelope"></i> 
+                    A confirmation email has been sent to <strong>@ViewBag.CustomerEmail</strong>
+                </div>
+                
+                <hr />
+                
+                <div class="text-center">
+                    <a href="@Url.Action("Index", "Products")" class="btn btn-primary btn-lg">
+                        <i class="glyphicon glyphicon-shopping-cart"></i> Continue Shopping
+                    </a>
+                    <a href="@Url.Action("Index", "Home")" class="btn btn-default btn-lg">
+                        <i class="glyphicon glyphicon-home"></i> Go to Home
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
