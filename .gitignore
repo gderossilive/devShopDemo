@@ -80,3 +80,4 @@ Desktop.ini
 # Temporary files
 *.tmp
 *.temp
+github-actions-credentials.json
