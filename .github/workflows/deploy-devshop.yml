@@ -108,15 +108,14 @@ jobs:
     
     - name: Upload package to VM and deploy
       shell: pwsh
-      env:
-        AZURE_RESOURCE_GROUP: ${{ secrets.RESOURCE_GROUP }}
-        AZURE_VM_NAME: ${{ secrets.VM_NAME }}
       run: |
         Write-Host "Deploying built application package to VM..."
         
-        # Parse credentials for client ID
+        # Parse credentials and set variables
         $creds = '${{ secrets.AZURE_CREDENTIALS }}' | ConvertFrom-Json
         $clientId = $creds.clientId
+        $resourceGroup = '${{ secrets.RESOURCE_GROUP }}'
+        $vmName = '${{ secrets.VM_NAME }}'
         
         Write-Host "Creating deployment package from built files..."
         Compress-Archive -Path "publish\*" -DestinationPath "built-app.zip" -Force
@@ -131,7 +130,7 @@ jobs:
         Write-Host "Creating temporary storage account: $storageAccountName"
         az storage account create `
           --name $storageAccountName `
-          --resource-group $env:AZURE_RESOURCE_GROUP `
+          --resource-group $resourceGroup `
           --location westeurope `
           --sku Standard_LRS `
           --allow-blob-public-access true
@@ -141,7 +140,7 @@ jobs:
         
         # Assign Storage Blob Data Contributor role to the service principal
         $spObjectId = az ad sp show --id $clientId --query id -o tsv
-        $storageId = az storage account show --name $storageAccountName --resource-group $env:AZURE_RESOURCE_GROUP --query id -o tsv
+        $storageId = az storage account show --name $storageAccountName --resource-group $resourceGroup --query id -o tsv
         
         Write-Host "Assigning Storage Blob Data Contributor role to service principal..."
         az role assignment create `
@@ -229,15 +228,15 @@ jobs:
         
         Write-Host "Executing deployment on VM..."
         az vm run-command invoke `
-          --resource-group $env:AZURE_RESOURCE_GROUP `
-          --name $env:WEB_VM_NAME `
+          --resource-group $resourceGroup `
+          --name $vmName `
           --command-id RunPowerShellScript `
           --scripts $scriptContent
         
         Write-Host "Cleaning up temporary storage account..."
         az storage account delete `
           --name $storageAccountName `
-          --resource-group $env:AZURE_RESOURCE_GROUP `
+          --resource-group $resourceGroup `
           --yes
     
     - name: Verify deployment
