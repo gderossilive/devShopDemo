@@ -77,8 +77,8 @@ jobs:
     - name: Create deployment package
       shell: pwsh
       run: |
-        Compress-Archive -Path "publish/*" -DestinationPath "devShop-app.zip" -Force
-        Write-Host "Package created: $(Get-Item devShop-app.zip | Select-Object Name, Length)"        
+        Compress-Archive -Path "publish\*" -DestinationPath "built-app.zip" -Force
+        Write-Host "Package created: $(Get-Item built-app.zip | Select-Object Name, Length)"        
         # Verify ZIP contents
         Write-Host "`nVerifying ZIP contents:"
         Add-Type -AssemblyName System.IO.Compression.FileSystem
