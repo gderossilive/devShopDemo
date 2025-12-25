@@ -52,14 +52,27 @@ jobs:
         $publishDir = "publish"
         New-Item -ItemType Directory -Path $publishDir -Force
         
-        # Copy all necessary files including the built bin folder
-        Copy-Item -Path "src/devShop/*" -Destination $publishDir -Recurse -Exclude @('obj', '*.csproj.user', 'packages')
+        # Copy all application files from src/devShop
+        Write-Host "Copying application files..."
+        Copy-Item -Path "src/devShop/*" -Destination $publishDir -Recurse -Exclude @('obj', '*.csproj.user', 'packages', 'bin')
         
-        Write-Host "Files prepared for deployment"
-        Write-Host "Checking for bin folder:"
-        Get-ChildItem "src/devShop/bin" -Recurse -ErrorAction SilentlyContinue | Select-Object FullName
-        Write-Host "Publish directory contents:"
-        Get-ChildItem $publishDir -Recurse | Select-Object FullName
+        # Copy the built bin folder from bin/Release to bin/
+        Write-Host "Copying compiled binaries..."
+        if (Test-Path "src/devShop/bin/Release") {
+          New-Item -ItemType Directory -Path "$publishDir/bin" -Force
+          Copy-Item -Path "src/devShop/bin/Release/*" -Destination "$publishDir/bin/" -Recurse -Force
+          Write-Host "✓ Copied from bin/Release to bin/"
+          Get-ChildItem "$publishDir/bin" | Select-Object Name, Length
+        } elseif (Test-Path "src/devShop/bin") {
+          Copy-Item -Path "src/devShop/bin" -Destination $publishDir -Recurse -Force
+          Write-Host "✓ Copied entire bin folder"
+          Get-ChildItem "$publishDir/bin" | Select-Object Name, Length
+        } else {
+          throw "No bin folder found! Build may have failed."
+        }
+        
+        Write-Host "`nPublish directory structure:"
+        Get-ChildItem $publishDir -Recurse -File | Select-Object FullName
     
     - name: Create deployment package
       shell: pwsh
