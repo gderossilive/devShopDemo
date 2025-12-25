@@ -59,130 +59,85 @@ jobs:
     - name: Upload package to VM and deploy
       shell: pwsh
       run: |
-        # Convert zip to base64 for transfer (smaller files)
-        $zipBytes = [System.IO.File]::ReadAllBytes("devShop-app.zip")
-        $base64Zip = [System.Convert]::ToBase64String($zipBytes)
+        Write-Host "Deploying application package to VM..."
         
-        # Split into chunks if needed (Azure run-command has limits)
-        $chunkSize = 100000
-        if ($base64Zip.Length -gt $chunkSize) {
-          Write-Host "Package too large, using alternative method..."
-          
-          # Use Azure Storage for large files
-          $storageAccount = az storage account list --resource-group $env:AZURE_RESOURCE_GROUP --query "[0].name" -o tsv
-          
-          az storage blob upload `
-            --account-name $storageAccount `
-            --container-name scripts `
-            --name "devShop-app.zip" `
-            --file "devShop-app.zip" `
-            --auth-mode login `
-            --overwrite true
-          
-          $expiryTime = (Get-Date).AddHours(1).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-          $sasToken = az storage blob generate-sas `
-            --account-name $storageAccount `
-            --container-name scripts `
-            --name "devShop-app.zip" `
-            --permissions r `
-            --expiry $expiryTime `
-            --auth-mode login `
-            --as-user `
-            --https-only `
-            --output tsv
-          
-          $blobUrl = "https://$storageAccount.blob.core.windows.net/scripts/devShop-app.zip?$sasToken"
-          
-          $deployScript = @"
-          `$ErrorActionPreference = 'Stop'
-          Write-Host 'Downloading application package...'
-          
-          `$zipPath = 'C:\Temp\devShop-app.zip'
-          `$appPath = 'C:\inetpub\wwwroot\devShop'
-          
-          New-Item -ItemType Directory -Path 'C:\Temp' -Force | Out-Null
-          
-          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-          Invoke-WebRequest -Uri '$blobUrl' -OutFile `$zipPath -UseBasicParsing
-          
-          Write-Host 'Stopping IIS...'
-          Import-Module WebAdministration
-          Stop-WebAppPool -Name 'devShopPool' -ErrorAction SilentlyContinue
-          Start-Sleep -Seconds 2
-          
-          Write-Host 'Extracting application...'
-          if (Test-Path `$appPath) {
-            Remove-Item "`$appPath\*" -Recurse -Force -ErrorAction SilentlyContinue
-          }
-          New-Item -ItemType Directory -Path `$appPath -Force | Out-Null
-          
-          Expand-Archive -Path `$zipPath -DestinationPath `$appPath -Force
-          
-          Write-Host 'Setting permissions...'
-          icacls `$appPath /grant 'IIS_IUSRS:(OI)(CI)RX' /T | Out-Null
-          icacls `$appPath /grant 'IUSR:(OI)(CI)RX' /T | Out-Null
-          if (Test-Path "`$appPath\App_Data") {
-            icacls "`$appPath\App_Data" /grant 'IIS_IUSRS:(OI)(CI)F' /T | Out-Null
-          }
-          
-          Write-Host 'Starting IIS...'
-          Start-WebAppPool -Name 'devShopPool'
-          Start-Website -Name 'devShop' -ErrorAction SilentlyContinue
-          
-          Remove-Item `$zipPath -Force -ErrorAction SilentlyContinue
-          
-          Write-Host 'Deployment complete!'
-          Write-Host "Files in bin folder: `$((Get-ChildItem `$appPath\bin -ErrorAction SilentlyContinue | Measure-Object).Count)"
-          "@
-          
-          Write-Host "Deploying to VM..."
-          az vm run-command invoke `
-            --resource-group $env:AZURE_RESOURCE_GROUP `
-            --name $env:WEB_VM_NAME `
-            --command-id RunPowerShellScript `
-            --scripts $deployScript
-        } else {
-          Write-Host "Using direct transfer method..."
-          
-          $deployScript = @"
-          `$ErrorActionPreference = 'Stop'
-          Write-Host 'Deploying application...'
-          
-          `$appPath = 'C:\inetpub\wwwroot\devShop'
-          `$zipPath = 'C:\Temp\devShop-app.zip'
-          
-          New-Item -ItemType Directory -Path 'C:\Temp' -Force | Out-Null
-          
-          # Decode base64 and save
-          `$zipBytes = [System.Convert]::FromBase64String('$base64Zip')
-          [System.IO.File]::WriteAllBytes(`$zipPath, `$zipBytes)
-          
-          Import-Module WebAdministration
-          Stop-WebAppPool -Name 'devShopPool' -ErrorAction SilentlyContinue
-          Start-Sleep -Seconds 2
-          
-          if (Test-Path `$appPath) {
-            Remove-Item "`$appPath\*" -Recurse -Force -ErrorAction SilentlyContinue
-          }
-          New-Item -ItemType Directory -Path `$appPath -Force | Out-Null
-          
-          Expand-Archive -Path `$zipPath -DestinationPath `$appPath -Force
-          
-          icacls `$appPath /grant 'IIS_IUSRS:(OI)(CI)RX' /T | Out-Null
-          icacls `$appPath /grant 'IUSR:(OI)(CI)RX' /T | Out-Null
-          
-          Start-WebAppPool -Name 'devShopPool'
-          Start-Website -Name 'devShop' -ErrorAction SilentlyContinue
-          
-          Write-Host 'Deployment complete!'
-          "@
-          
-          az vm run-command invoke `
-            --resource-group $env:AZURE_RESOURCE_GROUP `
-            --name $env:WEB_VM_NAME `
-            --command-id RunPowerShellScript `
-            --scripts $deployScript
+        # Use GitHub's artifact system instead of Azure Storage
+        # Download from public GitHub release or use direct URL method
+        
+        $repoUrl = "https://github.com/gderossilive/devShopDemo"
+        $deployScript = @"
+        `$ErrorActionPreference = 'Stop'
+        Write-Host 'Downloading and deploying application...'
+        
+        `$zipPath = 'C:\Temp\devShop-app.zip'
+        `$appPath = 'C:\inetpub\wwwroot\devShop'
+        
+        New-Item -ItemType Directory -Path 'C:\Temp' -Force | Out-Null
+        
+        # Download from GitHub repository archive
+        Write-Host 'Downloading repository...'
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        Invoke-WebRequest -Uri '$repoUrl/archive/refs/heads/main.zip' -OutFile `$zipPath -UseBasicParsing
+        
+        Write-Host 'Stopping IIS...'
+        Import-Module WebAdministration
+        Stop-WebAppPool -Name 'devShopPool' -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 2
+        
+        Write-Host 'Extracting application...'
+        `$tempExtract = 'C:\Temp\devShop-extract'
+        if (Test-Path `$tempExtract) {
+          Remove-Item `$tempExtract -Recurse -Force
         }
+        Expand-Archive -Path `$zipPath -DestinationPath `$tempExtract -Force
+        
+        # Find the src/devShop folder in extracted files
+        `$sourcePath = Get-ChildItem -Path `$tempExtract -Recurse -Directory | Where-Object { `$_.Name -eq 'devShop' -and `$_.Parent.Name -eq 'src' } | Select-Object -First 1
+        
+        if (-not `$sourcePath) {
+          throw 'Could not find src/devShop in extracted files'
+        }
+        
+        Write-Host "Source path: `$(`$sourcePath.FullName)"
+        
+        # Clear and copy application files
+        if (Test-Path `$appPath) {
+          Remove-Item "`$appPath\*" -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        New-Item -ItemType Directory -Path `$appPath -Force | Out-Null
+        
+        Copy-Item -Path "`$(`$sourcePath.FullName)\*" -Destination `$appPath -Recurse -Force
+        
+        Write-Host 'Setting permissions...'
+        icacls `$appPath /grant 'IIS_IUSRS:(OI)(CI)RX' /T | Out-Null
+        icacls `$appPath /grant 'IUSR:(OI)(CI)RX' /T | Out-Null
+        if (Test-Path "`$appPath\App_Data") {
+          icacls "`$appPath\App_Data" /grant 'IIS_IUSRS:(OI)(CI)F' /T | Out-Null
+        }
+        
+        Write-Host 'Starting IIS...'
+        Start-WebAppPool -Name 'devShopPool'
+        Start-Website -Name 'devShop' -ErrorAction SilentlyContinue
+        
+        # Cleanup
+        Remove-Item `$zipPath -Force -ErrorAction SilentlyContinue
+        Remove-Item `$tempExtract -Recurse -Force -ErrorAction SilentlyContinue
+        
+        Write-Host 'Deployment complete!'
+        `$binFiles = Get-ChildItem "`$appPath\bin" -ErrorAction SilentlyContinue
+        Write-Host "Files in bin folder: `$(`$binFiles.Count)"
+        if (`$binFiles.Count -gt 0) {
+          Write-Host 'Sample files:'
+          `$binFiles | Select-Object -First 5 | ForEach-Object { Write-Host "  - `$(`$_.Name)" }
+        }
+        "@
+        
+        Write-Host "Executing deployment on VM..."
+        az vm run-command invoke `
+          --resource-group $env:AZURE_RESOURCE_GROUP `
+          --name $env:WEB_VM_NAME `
+          --command-id RunPowerShellScript `
+          --scripts $deployScript
     
     - name: Verify deployment
       shell: pwsh
