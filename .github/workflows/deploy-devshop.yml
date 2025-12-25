@@ -148,21 +148,28 @@ jobs:
         if (-not $sshUser -or -not $privKey) { throw "Missing SSH_USERNAME or SSH_PRIVATE_KEY secrets" }
 
         # Write private key to file with correct permissions
-        $keyPath = "$env:USERPROFILE\\.ssh\\deploy_rsa"
+        $keyPath = "$env:USERPROFILE\.ssh\deploy_rsa"
         New-Item -ItemType Directory -Path (Split-Path $keyPath) -Force | Out-Null
         Set-Content -Path $keyPath -Value $privKey -Encoding ascii
-        icacls $keyPath /inheritance:r /grant "$env:USERNAME:(R)" | Out-Null
+        # Use attrib instead of icacls to avoid PowerShell parsing issues
+        attrib +R $keyPath
 
         # Get VM IP
         $ip = az vm show -d --resource-group $resourceGroup --name $vmName --query "publicIps" -o tsv
         if (-not $ip) { throw "VM IP not found" }
+
+        # Get runner's public IP and add to NSG
+        $runnerIp = (Invoke-RestMethod -Uri 'https://api.ipify.org')
+        Write-Host "Adding runner IP $runnerIp to NSG..."
+        az network nsg rule create --resource-group $resourceGroup --nsg-name nsg-web-devShop --name AllowSSH-Runner --priority 110 --direction Inbound --access Allow --protocol Tcp --destination-port-ranges 22 --source-address-prefixes "$runnerIp/32" --output none 2>$null
+        Start-Sleep -Seconds 5
 
         # Create package
         Compress-Archive -Path "publish\*" -DestinationPath "built-app.zip" -Force
 
         Write-Host "Copying package to VM via scp..."
         $dest = "${sshUser}@${ip}:/c:/Temp/built-app.zip"
-        scp -i $keyPath -o StrictHostKeyChecking=no "built-app.zip" $dest
+        scp -i $keyPath -o StrictHostKeyChecking=no -o ConnectTimeout=30 "built-app.zip" $dest
 
     - name: Deploy on VM
       shell: pwsh
