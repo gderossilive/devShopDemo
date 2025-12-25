@@ -141,70 +141,53 @@ jobs:
         Write-Host "Package split into $($chunks.Count) chunks for transfer"
         
         # Build deployment script that receives base64 chunks
-        $scriptContent = @"
-`$ErrorActionPreference = 'Stop'
-Write-Host 'Deploying built application with compiled DLLs...'
-
-`$appPath = 'C:\inetpub\wwwroot\devShop'
-`$zipPath = 'C:\Temp\built-app.zip'
-
-Write-Host 'Receiving package chunks...'
-`$base64String = ''
-"@
+        $scriptContent = "`$ErrorActionPreference = 'Stop'`n"
+        $scriptContent += "Write-Host 'Deploying built application with compiled DLLs...'`n`n"
+        $scriptContent += "`$appPath = 'C:\inetpub\wwwroot\devShop'`n"
+        $scriptContent += "`$zipPath = 'C:\Temp\built-app.zip'`n`n"
+        $scriptContent += "Write-Host 'Receiving package chunks...'`n"
+        $scriptContent += "`$base64String = ''`n"
         
         # Add each chunk to the script
         foreach ($chunk in $chunks) {
-          $scriptContent += "`n`$base64String += '$chunk'"
+          $scriptContent += "`$base64String += '$chunk'`n"
         }
         
-        $scriptContent += @"
-
-Write-Host 'Decoding package...'
-`$zipBytes = [Convert]::FromBase64String(`$base64String)
-New-Item -ItemType Directory -Path 'C:\Temp' -Force | Out-Null
-[System.IO.File]::WriteAllBytes(`$zipPath, `$zipBytes)
-Write-Host "Package saved: `$((Get-Item `$zipPath).Length) bytes"
-"@
-
-        $scriptContent += @"
-
-Write-Host 'Stopping IIS...'
-Import-Module WebAdministration
-Stop-WebAppPool -Name 'devShopPool' -ErrorAction SilentlyContinue
-Start-Sleep -Seconds 2
-
-Write-Host 'Clearing existing files...'
-if (Test-Path `$appPath) {
-  Remove-Item "`$appPath\*" -Recurse -Force -ErrorAction SilentlyContinue
-} else {
-  New-Item -ItemType Directory -Path `$appPath -Force | Out-Null
-}
-
-Write-Host 'Extracting application...'
-Expand-Archive -Path `$zipPath -DestinationPath `$appPath -Force
-
-Write-Host 'Checking what was extracted...'
-Write-Host "Total files extracted: `$((Get-ChildItem `$appPath -Recurse -File).Count)"
-Write-Host "Directories:"
-Get-ChildItem `$appPath -Directory | Select-Object Name
-
-Write-Host 'Setting permissions...'
-icacls `$appPath /grant 'IIS_IUSRS:(OI)(CI)RX' /T | Out-Null
-icacls `$appPath /grant 'IUSR:(OI)(CI)RX' /T | Out-Null
-if (Test-Path "`$appPath\App_Data") {
-  icacls "`$appPath\App_Data" /grant 'IIS_IUSRS:(OI)(CI)F' /T | Out-Null
-}
-
-Write-Host 'Starting IIS...'
-Start-WebAppPool -Name 'devShopPool'
-Start-Website -Name 'devShop' -ErrorAction SilentlyContinue
-
-Write-Host 'Deployment complete!'
-Write-Host 'Verifying bin folder:'
-Get-ChildItem "`$appPath\bin" -ErrorAction SilentlyContinue | Select-Object Name, Length | ForEach-Object { Write-Host "  `$(`$_.Name) - `$(`$_.Length) bytes" }
-
-Remove-Item `$zipPath -Force -ErrorAction SilentlyContinue
-"@
+        $scriptContent += "`nWrite-Host 'Decoding package...'`n"
+        $scriptContent += "`$zipBytes = [Convert]::FromBase64String(`$base64String)`n"
+        $scriptContent += "New-Item -ItemType Directory -Path 'C:\Temp' -Force | Out-Null`n"
+        $scriptContent += "[System.IO.File]::WriteAllBytes(`$zipPath, `$zipBytes)`n"
+        $scriptContent += "Write-Host `"Package saved: `$((Get-Item `$zipPath).Length) bytes`"`n`n"
+        $scriptContent += "Write-Host `"Package saved: `$((Get-Item `$zipPath).Length) bytes`"`n`n"
+        $scriptContent += "Write-Host 'Stopping IIS...'`n"
+        $scriptContent += "Import-Module WebAdministration`n"
+        $scriptContent += "Stop-WebAppPool -Name 'devShopPool' -ErrorAction SilentlyContinue`n"
+        $scriptContent += "Start-Sleep -Seconds 2`n`n"
+        $scriptContent += "Write-Host 'Clearing existing files...'`n"
+        $scriptContent += "if (Test-Path `$appPath) {`n"
+        $scriptContent += "  Remove-Item `"`$appPath\*`" -Recurse -Force -ErrorAction SilentlyContinue`n"
+        $scriptContent += "} else {`n"
+        $scriptContent += "  New-Item -ItemType Directory -Path `$appPath -Force | Out-Null`n"
+        $scriptContent += "}`n`n"
+        $scriptContent += "Write-Host 'Extracting application...'`n"
+        $scriptContent += "Expand-Archive -Path `$zipPath -DestinationPath `$appPath -Force`n`n"
+        $scriptContent += "Write-Host 'Checking what was extracted...'`n"
+        $scriptContent += "Write-Host `"Total files extracted: `$((Get-ChildItem `$appPath -Recurse -File).Count)`"`n"
+        $scriptContent += "Write-Host 'Directories:'`n"
+        $scriptContent += "Get-ChildItem `$appPath -Directory | Select-Object Name`n`n"
+        $scriptContent += "Write-Host 'Setting permissions...'`n"
+        $scriptContent += "icacls `$appPath /grant 'IIS_IUSRS:(OI)(CI)RX' /T | Out-Null`n"
+        $scriptContent += "icacls `$appPath /grant 'IUSR:(OI)(CI)RX' /T | Out-Null`n"
+        $scriptContent += "if (Test-Path `"`$appPath\App_Data`") {`n"
+        $scriptContent += "  icacls `"`$appPath\App_Data`" /grant 'IIS_IUSRS:(OI)(CI)F' /T | Out-Null`n"
+        $scriptContent += "}`n`n"
+        $scriptContent += "Write-Host 'Starting IIS...'`n"
+        $scriptContent += "Start-WebAppPool -Name 'devShopPool'`n"
+        $scriptContent += "Start-Website -Name 'devShop' -ErrorAction SilentlyContinue`n`n"
+        $scriptContent += "Write-Host 'Deployment complete!'`n"
+        $scriptContent += "Write-Host 'Verifying bin folder:'`n"
+        $scriptContent += "Get-ChildItem `"`$appPath\bin`" -ErrorAction SilentlyContinue | Select-Object Name, Length | ForEach-Object { Write-Host `"  `$(`$_.Name) - `$(`$_.Length) bytes`" }`n`n"
+        $scriptContent += "Remove-Item `$zipPath -Force -ErrorAction SilentlyContinue`n"
         
         Write-Host "Executing deployment on VM..."
         az vm run-command invoke `
