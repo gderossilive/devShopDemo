@@ -28,10 +28,10 @@ jobs:
       uses: NuGet/setup-nuget@v1
     
     - name: Restore NuGet packages
-      run: nuget restore src/devShop/devShop.sln
+      run: nuget restore src/devShop.sln
     
     - name: Build solution
-      run: msbuild src/devShop/devShop.sln /p:Configuration=Release /p:Platform="Any CPU" /p:DeployOnBuild=false
+      run: msbuild src/devShop.sln /p:Configuration=Release /p:Platform="Any CPU" /p:DeployOnBuild=false
     
     - name: Prepare deployment package
       shell: pwsh
