@@ -726,3 +726,4 @@ Contributi, issue e feature request sono benvenuti!
 **Autore:** Basato su Microsoft Ignite 2025 LAB501  
 **Data:** Dicembre 2025  
 **Versione:** 1.0  
+ 
