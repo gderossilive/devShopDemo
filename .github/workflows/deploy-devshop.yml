@@ -117,6 +117,17 @@ jobs:
         $resourceGroup = '${{ secrets.RESOURCE_GROUP }}'
         $vmName = '${{ secrets.VM_NAME }}'
         
+        Write-Host "Resource Group: $resourceGroup"
+        Write-Host "VM Name: $vmName"
+        Write-Host "Client ID: $clientId"
+        
+        if ([string]::IsNullOrEmpty($resourceGroup)) {
+          throw "RESOURCE_GROUP secret is not set!"
+        }
+        if ([string]::IsNullOrEmpty($vmName)) {
+          throw "VM_NAME secret is not set!"
+        }
+        
         Write-Host "Creating deployment package from built files..."
         Compress-Archive -Path "publish\*" -DestinationPath "built-app.zip" -Force
         $zipSize = (Get-Item "built-app.zip").Length / 1MB
