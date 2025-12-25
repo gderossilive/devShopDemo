@@ -116,7 +116,7 @@ jobs:
 
         if (-not $sshUser -or -not $pubKey) { throw "Missing SSH_USERNAME or SSH_PUBLIC_KEY secrets" }
 
-        $script = "$ErrorActionPreference='Stop';$u='$sshUser';$p='$pubKey';Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 | Out-Null;Set-Service -Name sshd -StartupType Automatic;Start-Service sshd;$profile='C:\\Users\\'+$u;if (-not (Test-Path $profile)) { throw 'User missing' };$sshDir=Join-Path $profile '.ssh';New-Item -ItemType Directory -Path $sshDir -Force | Out-Null;$auth=Join-Path $sshDir 'authorized_keys';Set-Content -Path $auth -Value $p -Encoding ascii;icacls $sshDir /inheritance:r /grant \"${u}:(OI)(CI)F\" | Out-Null;icacls $auth /inheritance:r /grant \"${u}:F\" | Out-Null;Write-Host 'OpenSSH ready'"
+        $script = "$ErrorActionPreference='Stop';$u='$sshUser';$p='$pubKey';Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 | Out-Null;Set-Service -Name sshd -StartupType Automatic;Start-Service sshd;$profile='C:\\Users\\'+$u;if (-not (Test-Path $profile)) { throw 'User missing' };$sshDir=Join-Path $profile '.ssh';New-Item -ItemType Directory -Path $sshDir -Force | Out-Null;$auth=Join-Path $sshDir 'authorized_keys';Set-Content -Path $auth -Value $p -Encoding ascii;icacls $sshDir /inheritance:r /grant `"$u:(OI)(CI)F`" | Out-Null;icacls $auth /inheritance:r /grant `"$u:F`" | Out-Null;Write-Host 'OpenSSH ready'"
 
         az vm run-command invoke --resource-group $resourceGroup --name $vmName --command-id RunPowerShellScript --scripts $script
 
