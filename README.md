@@ -87,9 +87,36 @@ cp .env.example .env
 **Tempo stimato**: 4-5 minuti
 
 Dopo il deployment:
-- Accedi all'applicazione tramite l'URL mostrato in output
-- RDP limitato al tuo IP (se configurato MY_IP in .env)
+- Infrastruttura Azure completamente configurata
+- Database SQL Server creato e popolato
+- IIS installato e configurato
 - VMs si spengono automaticamente alle 19:00 UTC (risparmio ~50%)
+- RDP limitato al tuo IP (se configurato MY_IP in .env)
+
+### Deployment Applicazione ASP.NET
+
+Dopo il provisioning dell'infrastruttura, deploy dell'applicazione:
+
+```bash
+# Se il repository è pubblico su GitHub
+pwsh -File scripts/deploy-app-git.ps1
+```
+
+**Nota**: L'applicazione ASP.NET richiede DLL compilate. Opzioni:
+
+**Opzione A - RDP e Build locale:**
+1. RDP al Web VM
+2. Installa Visual Studio Build Tools
+3. Build del progetto su Windows
+
+**Opzione B - CI/CD con GitHub Actions:**
+1. Configura GitHub Actions per build automatico
+2. Deploy delle DLL compilate
+
+**Opzione C - Build pre-deploy:**
+1. Build del progetto su Windows locale
+2. Commit delle DLL in `src/devShop/bin`
+3. Re-run `deploy-app-git.ps1`
 
 ### Deployment Manuale (metodo alternativo)
 
