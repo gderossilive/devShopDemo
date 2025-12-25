@@ -78,8 +78,20 @@ jobs:
       shell: pwsh
       run: |
         Compress-Archive -Path "publish/*" -DestinationPath "devShop-app.zip" -Force
-        Write-Host "Package created: $(Get-Item devShop-app.zip | Select-Object Name, Length)"
-    
+        Write-Host "Package created: $(Get-Item devShop-app.zip | Select-Object Name, Length)"        
+        # Verify ZIP contents
+        Write-Host "`nVerifying ZIP contents:"
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $zip = [System.IO.Compression.ZipFile]::OpenRead("built-app.zip")
+        $binFiles = $zip.Entries | Where-Object { $_.FullName -like "bin/*" }
+        Write-Host "Files in bin folder within ZIP:"
+        $binFiles | Select-Object FullName, Length | Format-Table
+        $zip.Dispose()
+        
+        if ($binFiles.Count -eq 0) {
+          throw "ERROR: bin folder not in ZIP file!"
+        }
+        Write-Host "✓ ZIP file contains $($binFiles.Count) files in bin folder"    
     - name: Azure Login
       shell: pwsh
       run: |
