@@ -119,76 +119,51 @@ jobs:
         
         Write-Host "Resource Group: $resourceGroup"
         Write-Host "VM Name: $vmName"
-        Write-Host "Client ID: $clientId"
         
         Write-Host "Creating deployment package from built files..."
         Compress-Archive -Path "publish\*" -DestinationPath "built-app.zip" -Force
         $zipSize = (Get-Item "built-app.zip").Length / 1MB
         Write-Host "Package size: $([math]::Round($zipSize, 2)) MB"
         
-        # Create a temporary storage account for deployment
-        $timestamp = Get-Date -Format "yyyyMMddHHmmss"
-        $storageAccountName = "devshoptmp$timestamp".ToLower().Substring(0, 24)
-        $containerName = "deploy"
+        # Convert ZIP to base64 for transfer
+        Write-Host "Encoding package for transfer..."
+        $zipBytes = [System.IO.File]::ReadAllBytes("built-app.zip")
+        $base64Zip = [Convert]::ToBase64String($zipBytes)
         
-        Write-Host "Creating temporary storage account: $storageAccountName"
-        az storage account create `
-          --name $storageAccountName `
-          --resource-group $resourceGroup `
-          --location westeurope `
-          --sku Standard_LRS `
-          --allow-blob-public-access true `
-          --allow-shared-key-access true
+        # Split into chunks (PowerShell command line limit is ~8KB per parameter)
+        $chunkSize = 5000
+        $chunks = @()
+        for ($i = 0; $i -lt $base64Zip.Length; $i += $chunkSize) {
+          $remainingLength = [Math]::Min($chunkSize, $base64Zip.Length - $i)
+          $chunks += $base64Zip.Substring($i, $remainingLength)
+        }
         
-        # Wait for account to be ready
-        Write-Host "Waiting for storage account to be ready..."
-        Start-Sleep -Seconds 10
+        Write-Host "Package split into $($chunks.Count) chunks for transfer"
         
-        # Get storage account key
-        Write-Host "Getting storage account key..."
-        $storageKey = az storage account keys list `
-          --resource-group $resourceGroup `
-          --account-name $storageAccountName `
-          --query "[0].value" -o tsv
-        
-        Write-Host "Creating container with public access..."
-        az storage container create `
-          --name $containerName `
-          --account-name $storageAccountName `
-          --account-key $storageKey `
-          --public-access blob
-        
-        Write-Host "Container created successfully"
-        
-        Write-Host "Uploading package..."
-        az storage blob upload `
-          --account-name $storageAccountName `
-          --account-key $storageKey `
-          --container-name $containerName `
-          --name "built-app.zip" `
-          --file "built-app.zip" `
-          --overwrite
-        
-        $blobUrl = "https://$storageAccountName.blob.core.windows.net/$containerName/built-app.zip"
-        Write-Host "Package uploaded to: $blobUrl"
-        
-        # Create deployment script that downloads from blob
+        # Build deployment script that receives base64 chunks
         $scriptContent = @'
         $ErrorActionPreference = 'Stop'
         Write-Host 'Deploying built application with compiled DLLs...'
         
         $appPath = 'C:\inetpub\wwwroot\devShop'
         $zipPath = 'C:\Temp\built-app.zip'
-        '@
         
-        $scriptContent += "`n`$blobUrl = '$blobUrl'"
+        Write-Host 'Receiving package chunks...'
+        $base64String = ''
+'@
+        
+        # Add each chunk to the script
+        for ($i = 0; $i < $chunks.Count; $i++) {
+          $scriptContent += "`n`$base64String += '$($chunks[$i])'"
+        }
         
         $scriptContent += @'
         
-        Write-Host 'Downloading package from storage...'
+        Write-Host 'Decoding package...'
+        $zipBytes = [Convert]::FromBase64String($base64String)
         New-Item -ItemType Directory -Path 'C:\Temp' -Force | Out-Null
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        Invoke-WebRequest -Uri $blobUrl -OutFile $zipPath -UseBasicParsing
+        [System.IO.File]::WriteAllBytes($zipPath, $zipBytes)
+        Write-Host "Package saved: $((Get-Item $zipPath).Length) bytes"
         
         Write-Host 'Stopping IIS...'
         Import-Module WebAdministration
@@ -234,12 +209,6 @@ jobs:
           --name $vmName `
           --command-id RunPowerShellScript `
           --scripts $scriptContent
-        
-        Write-Host "Cleaning up temporary storage account..."
-        az storage account delete `
-          --name $storageAccountName `
-          --resource-group $resourceGroup `
-          --yes
     
     - name: Verify deployment
       shell: pwsh

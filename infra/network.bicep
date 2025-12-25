@@ -104,6 +104,20 @@ resource webNsg 'Microsoft.Network/networkSecurityGroups@2023-11-01' = {
         }
       }
       {
+        name: 'AllowSSH'
+        properties: {
+          priority: 125
+          direction: 'Inbound'
+          access: 'Allow'
+          protocol: 'Tcp'
+          sourceAddressPrefix: allowedRdpSourceIp != '' ? allowedRdpSourceIp : '*'
+          sourcePortRange: '*'
+          destinationAddressPrefix: '*'
+          destinationPortRange: '22'
+          description: allowedRdpSourceIp != '' ? 'Allow SSH from specific IP' : 'Allow SSH for management'
+        }
+      }
+      {
         name: 'AllowSQLFromWeb'
         properties: {
           priority: 130
