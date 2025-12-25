@@ -126,26 +126,29 @@ jobs:
           --allow-blob-public-access true `
           --allow-shared-key-access true
         
-        Write-Host "Getting storage account key..."
-        $storageKey = az storage account keys list `
+        # Wait for account to be ready
+        Start-Sleep -Seconds 5
+        
+        # Update the account to ensure shared key access is enabled
+        az storage account update `
+          --name $storageAccountName `
           --resource-group $env:AZURE_RESOURCE_GROUP `
-          --account-name $storageAccountName `
-          --query "[0].value" -o tsv
+          --allow-shared-key-access true
         
         Write-Host "Creating container with public access..."
         az storage container create `
           --name $containerName `
           --account-name $storageAccountName `
-          --account-key $storageKey `
-          --public-access blob
+          --public-access blob `
+          --auth-mode login
         
         Write-Host "Uploading package..."
         az storage blob upload `
           --account-name $storageAccountName `
-          --account-key $storageKey `
           --container-name $containerName `
           --name "built-app.zip" `
-          --file "built-app.zip"
+          --file "built-app.zip" `
+          --auth-mode login
         
         $blobUrl = "https://$storageAccountName.blob.core.windows.net/$containerName/built-app.zip"
         Write-Host "Package uploaded to: $blobUrl"
