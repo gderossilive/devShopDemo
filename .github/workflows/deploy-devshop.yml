@@ -113,88 +113,42 @@ jobs:
         
         # Parse credentials and set variables
         $creds = '${{ secrets.AZURE_CREDENTIALS }}' | ConvertFrom-Json
-        $clientId = $creds.clientId
         $resourceGroup = 'rg-devShop'
         $vmName = 'vm-web-devShop'
-        
-        Write-Host "Resource Group: $resourceGroup"
-        Write-Host "VM Name: $vmName"
         
         Write-Host "Creating deployment package from built files..."
         Compress-Archive -Path "publish\*" -DestinationPath "built-app.zip" -Force
         $zipSize = (Get-Item "built-app.zip").Length / 1MB
         Write-Host "Package size: $([math]::Round($zipSize, 2)) MB"
         
-        # Convert ZIP to base64 for transfer
-        Write-Host "Encoding package for transfer..."
+        # Convert ZIP to base64
+        Write-Host "Encoding package..."
         $zipBytes = [System.IO.File]::ReadAllBytes("built-app.zip")
         $base64Zip = [Convert]::ToBase64String($zipBytes)
         
-        # Split into chunks (PowerShell command line limit is ~8KB per parameter)
-        $chunkSize = 5000
-        $chunks = @()
-        for ($i = 0; $i -lt $base64Zip.Length; $i += $chunkSize) {
-          $remainingLength = [Math]::Min($chunkSize, $base64Zip.Length - $i)
-          $chunks += $base64Zip.Substring($i, $remainingLength)
+        # Initialize temp file on VM
+        Write-Host "Initializing deployment..."
+        az vm run-command invoke --resource-group $resourceGroup --name $vmName --command-id RunPowerShellScript --scripts "New-Item -ItemType Directory -Force 'C:\Temp' | Out-Null; \`$null = New-Item -ItemType File -Force 'C:\Temp\app.txt'; Write-Host 'Ready'" | Out-Null
+        
+        # Upload in 50KB chunks
+        $chunkSize = 50000
+        $totalChunks = [math]::Ceiling($base64Zip.Length / $chunkSize)
+        Write-Host "Uploading in $totalChunks chunks..."
+        
+        for ($i = 0; $i -lt $totalChunks; $i++) {
+          $start = $i * $chunkSize
+          $length = [Math]::Min($chunkSize, $base64Zip.Length - $start)
+          $chunk = $base64Zip.Substring($start, $length)
+          $pct = [math]::Round(($i + 1) / $totalChunks * 100)
+          Write-Host "  $($i+1)/$totalChunks ($pct%)..."
+          az vm run-command invoke --resource-group $resourceGroup --name $vmName --command-id RunPowerShellScript --scripts "Add-Content 'C:\Temp\app.txt' -Value '$chunk' -NoNewline" | Out-Null
         }
         
-        Write-Host "Package split into $($chunks.Count) chunks for transfer"
+        # Deploy
+        Write-Host "Deploying..."
+        $cmd = "\`$ErrorActionPreference='Stop';\`$b=Get-Content 'C:\Temp\app.txt' -Raw;\`$bytes=[Convert]::FromBase64String(\`$b);[IO.File]::WriteAllBytes('C:\Temp\app.zip',\`$bytes);\`$app='C:\inetpub\wwwroot\devShop';Import-Module WebAdministration;Stop-WebAppPool 'devShopPool' -EA:0;Sleep 2;if(Test-Path \`$app){rm \"\`$app\*\" -R -Force}else{mkdir \`$app -Force|Out-Null};Expand-Archive 'C:\Temp\app.zip' \`$app -Force;icacls \`$app /grant 'IIS_IUSRS:(OI)(CI)RX' /T|Out-Null;icacls \`$app /grant 'IUSR:(OI)(CI)RX' /T|Out-Null;if(Test-Path \"\`$app\App_Data\"){icacls \"\`$app\App_Data\" /grant 'IIS_IUSRS:(OI)(CI)F' /T|Out-Null};Start-WebAppPool 'devShopPool';Start-Website 'devShop' -EA:0;Write-Host 'Done';gci \"\`$app\bin\" -EA:0|select Name,Length|%{Write-Host \"  \`$(\`$_.Name)-\`$(\`$_.Length)b\"};rm 'C:\Temp\app.zip','C:\Temp\app.txt' -Force -EA:0"
         
-        # Build deployment script that receives base64 chunks
-        $scriptContent = "`$ErrorActionPreference = 'Stop'`n"
-        $scriptContent += "Write-Host 'Deploying built application with compiled DLLs...'`n`n"
-        $scriptContent += "`$appPath = 'C:\inetpub\wwwroot\devShop'`n"
-        $scriptContent += "`$zipPath = 'C:\Temp\built-app.zip'`n`n"
-        $scriptContent += "Write-Host 'Receiving package chunks...'`n"
-        $scriptContent += "`$base64String = ''`n"
-        
-        # Add each chunk to the script
-        foreach ($chunk in $chunks) {
-          $scriptContent += "`$base64String += '$chunk'`n"
-        }
-        
-        $scriptContent += "`nWrite-Host 'Decoding package...'`n"
-        $scriptContent += "`$zipBytes = [Convert]::FromBase64String(`$base64String)`n"
-        $scriptContent += "New-Item -ItemType Directory -Path 'C:\Temp' -Force | Out-Null`n"
-        $scriptContent += "[System.IO.File]::WriteAllBytes(`$zipPath, `$zipBytes)`n"
-        $scriptContent += "Write-Host `"Package saved: `$((Get-Item `$zipPath).Length) bytes`"`n`n"
-        $scriptContent += "Write-Host `"Package saved: `$((Get-Item `$zipPath).Length) bytes`"`n`n"
-        $scriptContent += "Write-Host 'Stopping IIS...'`n"
-        $scriptContent += "Import-Module WebAdministration`n"
-        $scriptContent += "Stop-WebAppPool -Name 'devShopPool' -ErrorAction SilentlyContinue`n"
-        $scriptContent += "Start-Sleep -Seconds 2`n`n"
-        $scriptContent += "Write-Host 'Clearing existing files...'`n"
-        $scriptContent += "if (Test-Path `$appPath) {`n"
-        $scriptContent += "  Remove-Item `"`$appPath\*`" -Recurse -Force -ErrorAction SilentlyContinue`n"
-        $scriptContent += "} else {`n"
-        $scriptContent += "  New-Item -ItemType Directory -Path `$appPath -Force | Out-Null`n"
-        $scriptContent += "}`n`n"
-        $scriptContent += "Write-Host 'Extracting application...'`n"
-        $scriptContent += "Expand-Archive -Path `$zipPath -DestinationPath `$appPath -Force`n`n"
-        $scriptContent += "Write-Host 'Checking what was extracted...'`n"
-        $scriptContent += "Write-Host `"Total files extracted: `$((Get-ChildItem `$appPath -Recurse -File).Count)`"`n"
-        $scriptContent += "Write-Host 'Directories:'`n"
-        $scriptContent += "Get-ChildItem `$appPath -Directory | Select-Object Name`n`n"
-        $scriptContent += "Write-Host 'Setting permissions...'`n"
-        $scriptContent += "icacls `$appPath /grant 'IIS_IUSRS:(OI)(CI)RX' /T | Out-Null`n"
-        $scriptContent += "icacls `$appPath /grant 'IUSR:(OI)(CI)RX' /T | Out-Null`n"
-        $scriptContent += "if (Test-Path `"`$appPath\App_Data`") {`n"
-        $scriptContent += "  icacls `"`$appPath\App_Data`" /grant 'IIS_IUSRS:(OI)(CI)F' /T | Out-Null`n"
-        $scriptContent += "}`n`n"
-        $scriptContent += "Write-Host 'Starting IIS...'`n"
-        $scriptContent += "Start-WebAppPool -Name 'devShopPool'`n"
-        $scriptContent += "Start-Website -Name 'devShop' -ErrorAction SilentlyContinue`n`n"
-        $scriptContent += "Write-Host 'Deployment complete!'`n"
-        $scriptContent += "Write-Host 'Verifying bin folder:'`n"
-        $scriptContent += "Get-ChildItem `"`$appPath\bin`" -ErrorAction SilentlyContinue | Select-Object Name, Length | ForEach-Object { Write-Host `"  `$(`$_.Name) - `$(`$_.Length) bytes`" }`n`n"
-        $scriptContent += "Remove-Item `$zipPath -Force -ErrorAction SilentlyContinue`n"
-        
-        Write-Host "Executing deployment on VM..."
-        az vm run-command invoke `
-          --resource-group $resourceGroup `
-          --name $vmName `
-          --command-id RunPowerShellScript `
-          --scripts $scriptContent
+        az vm run-command invoke --resource-group $resourceGroup --name $vmName --command-id RunPowerShellScript --scripts $cmd
     
     - name: Verify deployment
       shell: pwsh
