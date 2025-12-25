@@ -80,85 +80,54 @@ jobs:
     - name: Upload package to VM and deploy
       shell: pwsh
       run: |
-        Write-Host "Deploying application package to VM..."
+        Write-Host "Deploying built application package to VM..."
         
-        # Use GitHub's artifact system instead of Azure Storage
-        # Download from public GitHub release or use direct URL method
+        Write-Host "Creating deployment package from built files..."
+        Compress-Archive -Path "publish\*" -DestinationPath "built-app.zip" -Force
+        $zipSize = (Get-Item "built-app.zip").Length / 1MB
+        Write-Host "Package size: $([math]::Round($zipSize, 2)) MB"
         
-        $repoUrl = "https://github.com/gderossilive/devShopDemo"
-        $deployScript = @"
-        `$ErrorActionPreference = 'Stop'
-        Write-Host 'Downloading and deploying application...'
-        
-        `$zipPath = 'C:\Temp\devShop-app.zip'
-        `$appPath = 'C:\inetpub\wwwroot\devShop'
-        
-        New-Item -ItemType Directory -Path 'C:\Temp' -Force | Out-Null
-        
-        # Download from GitHub repository archive
-        Write-Host 'Downloading repository...'
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        Invoke-WebRequest -Uri '$repoUrl/archive/refs/heads/main.zip' -OutFile `$zipPath -UseBasicParsing
-        
-        Write-Host 'Stopping IIS...'
-        Import-Module WebAdministration
-        Stop-WebAppPool -Name 'devShopPool' -ErrorAction SilentlyContinue
-        Start-Sleep -Seconds 2
-        
-        Write-Host 'Extracting application...'
-        `$tempExtract = 'C:\Temp\devShop-extract'
-        if (Test-Path `$tempExtract) {
-          Remove-Item `$tempExtract -Recurse -Force
-        }
-        Expand-Archive -Path `$zipPath -DestinationPath `$tempExtract -Force
-        
-        # Find the src/devShop folder in extracted files
-        `$sourcePath = Get-ChildItem -Path `$tempExtract -Recurse -Directory | Where-Object { `$_.Name -eq 'devShop' -and `$_.Parent.Name -eq 'src' } | Select-Object -First 1
-        
-        if (-not `$sourcePath) {
-          throw 'Could not find src/devShop in extracted files'
+        if ($zipSize -gt 100) {
+          throw "Package too large for direct upload ($zipSize MB). Maximum is 100MB."
         }
         
-        Write-Host "Source path: `$(`$sourcePath.FullName)"
+        Write-Host "Encoding package to base64..."
+        $base64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes("built-app.zip"))
         
-        # Clear and copy application files
-        if (Test-Path `$appPath) {
-          Remove-Item "`$appPath\*" -Recurse -Force -ErrorAction SilentlyContinue
-        }
-        New-Item -ItemType Directory -Path `$appPath -Force | Out-Null
-        
-        Copy-Item -Path "`$(`$sourcePath.FullName)\*" -Destination `$appPath -Recurse -Force
-        
-        Write-Host 'Setting permissions...'
-        icacls `$appPath /grant 'IIS_IUSRS:(OI)(CI)RX' /T | Out-Null
-        icacls `$appPath /grant 'IUSR:(OI)(CI)RX' /T | Out-Null
-        if (Test-Path "`$appPath\App_Data") {
-          icacls "`$appPath\App_Data" /grant 'IIS_IUSRS:(OI)(CI)F' /T | Out-Null
-        }
-        
-        Write-Host 'Starting IIS...'
-        Start-WebAppPool -Name 'devShopPool'
-        Start-Website -Name 'devShop' -ErrorAction SilentlyContinue
-        
-        # Cleanup
-        Remove-Item `$zipPath -Force -ErrorAction SilentlyContinue
-        Remove-Item `$tempExtract -Recurse -Force -ErrorAction SilentlyContinue
-        
-        Write-Host 'Deployment complete!'
-        `$binFiles = Get-ChildItem "`$appPath\bin" -ErrorAction SilentlyContinue
-        Write-Host "Files in bin folder: `$(`$binFiles.Count)"
-        if (`$binFiles.Count -gt 0) {
-          Write-Host 'Sample files:'
-          `$binFiles | Select-Object -First 5 | ForEach-Object { Write-Host "  - `$(`$_.Name)" }
-        }
-        "@
+        Write-Host "Creating deployment script..."
+        $script1 = '$ErrorActionPreference = ''Stop''; '
+        $script1 += 'Write-Host ''Deploying built application with compiled DLLs...''; '
+        $script1 += '$appPath = ''C:\inetpub\wwwroot\devShop''; '
+        $script1 += '$zipPath = ''C:\Temp\built-app.zip''; '
+        $script1 += 'Write-Host ''Decoding and saving package...''; '
+        $script1 += 'New-Item -ItemType Directory -Path ''C:\Temp'' -Force | Out-Null; '
+        $script1 += '[IO.File]::WriteAllBytes($zipPath, [Convert]::FromBase64String(''' + $base64 + ''')); '
+        $script1 += 'Write-Host ''Stopping IIS...''; '
+        $script1 += 'Import-Module WebAdministration; '
+        $script1 += 'Stop-WebAppPool -Name ''devShopPool'' -ErrorAction SilentlyContinue; '
+        $script1 += 'Start-Sleep -Seconds 2; '
+        $script1 += 'Write-Host ''Clearing existing files...''; '
+        $script1 += 'if (Test-Path $appPath) { Remove-Item "$appPath\*" -Recurse -Force -ErrorAction SilentlyContinue } else { New-Item -ItemType Directory -Path $appPath -Force | Out-Null }; '
+        $script1 += 'Write-Host ''Extracting application...''; '
+        $script1 += 'Expand-Archive -Path $zipPath -DestinationPath $appPath -Force; '
+        $script1 += 'Write-Host ''Setting permissions...''; '
+        $script1 += 'icacls $appPath /grant ''IIS_IUSRS:(OI)(CI)RX'' /T | Out-Null; '
+        $script1 += 'icacls $appPath /grant ''IUSR:(OI)(CI)RX'' /T | Out-Null; '
+        $script1 += 'if (Test-Path "$appPath\App_Data") { icacls "$appPath\App_Data" /grant ''IIS_IUSRS:(OI)(CI)F'' /T | Out-Null }; '
+        $script1 += 'Write-Host ''Starting IIS...''; '
+        $script1 += 'Start-WebAppPool -Name ''devShopPool''; '
+        $script1 += 'Start-Website -Name ''devShop'' -ErrorAction SilentlyContinue; '
+        $script1 += 'Write-Host ''Deployment complete!''; '
+        $script1 += 'Write-Host ''Verifying bin folder:''; '
+        $script1 += 'Get-ChildItem "$appPath\bin" -ErrorAction SilentlyContinue | Select-Object Name, Length | ForEach-Object { Write-Host "  $($_.Name) - $($_.Length) bytes" }; '
+        $script1 += 'Remove-Item $zipPath -Force -ErrorAction SilentlyContinue'
         
         Write-Host "Executing deployment on VM..."
         az vm run-command invoke `
           --resource-group $env:AZURE_RESOURCE_GROUP `
           --name $env:WEB_VM_NAME `
           --command-id RunPowerShellScript `
-          --scripts $deployScript
+          --scripts $script1
     
     - name: Verify deployment
       shell: pwsh
