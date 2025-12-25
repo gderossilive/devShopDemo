@@ -51,13 +51,24 @@ jobs:
         Compress-Archive -Path "publish/*" -DestinationPath "devShop-app.zip" -Force
         Write-Host "Package created: $(Get-Item devShop-app.zip | Select-Object Name, Length)"
     
+    - name: Parse Azure credentials
+      id: azure-creds
+      shell: pwsh
+      run: |
+        $creds = '${{ secrets.AZURE_CREDENTIALS }}' | ConvertFrom-Json
+        echo "client-id=$($creds.clientId)" >> $env:GITHUB_OUTPUT
+        echo "tenant-id=$($creds.tenantId)" >> $env:GITHUB_OUTPUT
+        echo "subscription-id=$($creds.subscriptionId)" >> $env:GITHUB_OUTPUT
+        echo "::add-mask::$($creds.clientSecret)"
+        echo "client-secret=$($creds.clientSecret)" >> $env:GITHUB_OUTPUT
+    
     - name: Azure Login
       uses: azure/login@v1
       with:
-        client-id: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientId }}
-        tenant-id: ${{ fromJson(secrets.AZURE_CREDENTIALS).tenantId }}
-        subscription-id: ${{ fromJson(secrets.AZURE_CREDENTIALS).subscriptionId }}
-        client-secret: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientSecret }}
+        client-id: ${{ steps.azure-creds.outputs.client-id }}
+        tenant-id: ${{ steps.azure-creds.outputs.tenant-id }}
+        subscription-id: ${{ steps.azure-creds.outputs.subscription-id }}
+        client-secret: ${{ steps.azure-creds.outputs.client-secret }}
     
     - name: Upload package to VM and deploy
       shell: pwsh
