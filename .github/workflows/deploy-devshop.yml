@@ -140,19 +140,6 @@ jobs:
           --allow-blob-public-access true
         
         # Wait for account to be ready
-        Start-Sleep -Seconds 5
-        
-        # Assign Storage Blob Data Contributor role to the service principal
-        $spObjectId = az ad sp show --id $clientId --query id -o tsv
-        $storageId = az storage account show --name $storageAccountName --resource-group $resourceGroup --query id -o tsv
-        
-        Write-Host "Assigning Storage Blob Data Contributor role to service principal..."
-        az role assignment create `
-          --assignee $spObjectId `
-          --role "Storage Blob Data Contributor" `
-          --scope $storageId
-        
-        # Wait for role assignment to propagate
         Start-Sleep -Seconds 10
         
         Write-Host "Creating container with public access..."
