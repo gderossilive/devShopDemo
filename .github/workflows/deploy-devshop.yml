@@ -101,6 +101,10 @@ jobs:
           --password $creds.clientSecret `
           --tenant $creds.tenantId
         az account set --subscription $creds.subscriptionId
+        
+        # Save credentials to environment for later steps
+        "AZURE_CLIENT_ID=$($creds.clientId)" >> $env:GITHUB_ENV
+        "AZURE_RESOURCE_GROUP=${{ secrets.RESOURCE_GROUP }}" >> $env:GITHUB_ENV
     
     - name: Upload package to VM and deploy
       shell: pwsh
