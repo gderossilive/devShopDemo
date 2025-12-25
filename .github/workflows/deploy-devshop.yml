@@ -87,30 +87,60 @@ jobs:
         $zipSize = (Get-Item "built-app.zip").Length / 1MB
         Write-Host "Package size: $([math]::Round($zipSize, 2)) MB"
         
-        if ($zipSize -gt 100) {
-          throw "Package too large for direct upload ($zipSize MB). Maximum is 100MB."
-        }
+        # Create a temporary storage account for deployment
+        $timestamp = Get-Date -Format "yyyyMMddHHmmss"
+        $storageAccountName = "devshoptmp$timestamp".ToLower().Substring(0, 24)
+        $containerName = "deploy"
         
-        Write-Host "Encoding package to base64..."
-        $base64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes("built-app.zip"))
+        Write-Host "Creating temporary storage account: $storageAccountName"
+        az storage account create `
+          --name $storageAccountName `
+          --resource-group $env:AZURE_RESOURCE_GROUP `
+          --location westeurope `
+          --sku Standard_LRS `
+          --allow-blob-public-access true
         
-        Write-Host "Creating deployment script file..."
+        Write-Host "Getting storage account key..."
+        $storageKey = az storage account keys list `
+          --resource-group $env:AZURE_RESOURCE_GROUP `
+          --account-name $storageAccountName `
+          --query "[0].value" -o tsv
         
-        # Build the script content
+        Write-Host "Creating container with public access..."
+        az storage container create `
+          --name $containerName `
+          --account-name $storageAccountName `
+          --account-key $storageKey `
+          --public-access blob
+        
+        Write-Host "Uploading package..."
+        az storage blob upload `
+          --account-name $storageAccountName `
+          --account-key $storageKey `
+          --container-name $containerName `
+          --name "built-app.zip" `
+          --file "built-app.zip"
+        
+        $blobUrl = "https://$storageAccountName.blob.core.windows.net/$containerName/built-app.zip"
+        Write-Host "Package uploaded to: $blobUrl"
+        
+        # Create deployment script that downloads from blob
         $scriptContent = @'
         $ErrorActionPreference = 'Stop'
         Write-Host 'Deploying built application with compiled DLLs...'
         
         $appPath = 'C:\inetpub\wwwroot\devShop'
         $zipPath = 'C:\Temp\built-app.zip'
-        
-        Write-Host 'Decoding and saving package...'
-        New-Item -ItemType Directory -Path 'C:\Temp' -Force | Out-Null
         '@
         
-        $scriptContent += "`n[IO.File]::WriteAllBytes(`$zipPath, [Convert]::FromBase64String('$base64'))"
+        $scriptContent += "`n`$blobUrl = '$blobUrl'"
         
         $scriptContent += @'
+        
+        Write-Host 'Downloading package from storage...'
+        New-Item -ItemType Directory -Path 'C:\Temp' -Force | Out-Null
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        Invoke-WebRequest -Uri $blobUrl -OutFile $zipPath -UseBasicParsing
         
         Write-Host 'Stopping IIS...'
         Import-Module WebAdministration
@@ -145,16 +175,18 @@ jobs:
         Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
         '@
         
-        # Save script to file
-        $scriptContent | Out-File -FilePath "deploy-to-vm.ps1" -Encoding UTF8
-        Write-Host "Script file size: $([math]::Round((Get-Item 'deploy-to-vm.ps1').Length / 1MB, 2)) MB"
-        
         Write-Host "Executing deployment on VM..."
         az vm run-command invoke `
           --resource-group $env:AZURE_RESOURCE_GROUP `
           --name $env:WEB_VM_NAME `
           --command-id RunPowerShellScript `
-          --scripts '@deploy-to-vm.ps1'
+          --scripts $scriptContent
+        
+        Write-Host "Cleaning up temporary storage account..."
+        az storage account delete `
+          --name $storageAccountName `
+          --resource-group $env:AZURE_RESOURCE_GROUP `
+          --yes
     
     - name: Verify deployment
       shell: pwsh
