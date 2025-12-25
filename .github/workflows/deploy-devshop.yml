@@ -161,7 +161,8 @@ jobs:
         Compress-Archive -Path "publish\*" -DestinationPath "built-app.zip" -Force
 
         Write-Host "Copying package to VM via scp..."
-        scp -i $keyPath -o StrictHostKeyChecking=no "built-app.zip" "$sshUser@$ip:/c:/Temp/built-app.zip"
+        $dest = "${sshUser}@${ip}:/c:/Temp/built-app.zip"
+        scp -i $keyPath -o StrictHostKeyChecking=no "built-app.zip" $dest
 
     - name: Deploy on VM
       shell: pwsh
